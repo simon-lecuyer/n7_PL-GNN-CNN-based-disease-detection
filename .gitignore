@@ -1,0 +1,109 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PyTorch
+*.pth
+*.pt
+*.ckpt
+# Keep best model checkpoints (uncomment if needed)
+# !**/checkpoints/best_model.pth
+
+# Training logs
+*.log
+*.tfevents.*
+runs/
+lightning_logs/
+
+# Jupyter Notebook (if any temporary notebooks are created)
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+# Allow test notebooks
+!test/*.ipynb
+
+# Data
+data/raw/*
+data/processed/*
+data/simulations/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/simulations/.gitkeep
+
+# Results
+results/figures/*
+results/metrics/*
+results/comparisons/*
+!results/figures/.gitkeep
+!results/metrics/.gitkeep
+!results/comparisons/.gitkeep
+
+# Checkpoints
+gnn/checkpoints/*
+cnn/checkpoints/*
+!gnn/checkpoints/.gitkeep
+!cnn/checkpoints/.gitkeep
+
+# Training logs
+gnn/training_logs/*
+cnn/training_logs/*
+!gnn/training_logs/.gitkeep
+!cnn/training_logs/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Weights & Biases
+wandb/
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# OS
+Thumbs.db
+Desktop.ini
