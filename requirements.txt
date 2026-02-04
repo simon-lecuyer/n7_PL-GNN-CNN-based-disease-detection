@@ -39,9 +39,13 @@ imageio>=2.9.0
 # Graph Processing
 networkx>=2.6.0
 
-# WaterberryFarms dependencies
-# Note: Install WaterberryFarms separately
-# git+https://github.com/lboloni/WaterberryFarms.git
+# WaterberryFarms dependencies (intégré comme bibliothèque)
+# Note: WaterberryFarms doit être dans le dossier parent
+# Structure requise:
+#   Projet_Long/
+#   ├── n7_PL-GNN-CNN-based-disease-detection/
+#   └── WaterberryFarms/
+# Pas besoin d'installation séparée, import direct depuis scripts/generate_data.py
 
 # Development & Testing
 pytest>=7.0.0

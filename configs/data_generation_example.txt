@@ -1,0 +1,42 @@
+# Configuration pour la génération de données - Exemple de base
+# Usage: python scripts/generate_data.py @configs/data_generation_example.txt
+
+--output_dir
+data/simulations
+
+--num_simulations
+10
+
+--grid_size
+50
+
+--timesteps
+100
+
+--model_type
+epidemic
+
+# Paramètres du modèle épidémique (SIR)
+--p_transmission
+0.2
+
+--infection_duration
+5
+
+--spread_dimension
+11
+
+--infection_seeds
+-1
+
+# Formats de sortie
+--output_formats
+images
+graphs
+
+--image_format
+png
+
+# Seed pour reproductibilité (optionnel)
+--seed
+42
