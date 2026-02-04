@@ -83,6 +83,25 @@ n7_PL-GNN-CNN-based-disease-detection/
 
 ## 🚀 Getting Started
 
+### Prérequis - WaterberryFarms
+
+⚠️ **IMPORTANT** : Ce projet nécessite **WaterberryFarms** pour la génération de données de simulation.
+
+**Structure de dossiers requise :**
+```
+Projet_Long/
+├── n7_PL-GNN-CNN-based-disease-detection/    ← Ce projet
+└── WaterberryFarms/                          ← Simulateur requis
+```
+
+Si WaterberryFarms n'est pas installé :
+```bash
+cd /path/to/Projet_Long
+git clone https://github.com/lboloni/WaterberryFarms.git
+```
+
+Le script `generate_data.py` détecte automatiquement WaterberryFarms dans le dossier parent.
+
 ### Installation
 
 **1. Créer l'environnement conda**
@@ -127,15 +146,102 @@ conda create -n N7_PL python=3.10 -y && conda activate N7_PL && conda install py
 # 1. Activer l'environnement
 conda activate N7_PL
 
-# 2. Générer les données
-python scripts/generate_data.py --config configs/simulation_config.yaml
+# 2. Générer les données (depuis le dossier du projet)
+python scripts/generate_data.py --num_simulations 5 --grid_size 50 --timesteps 100
 
-# 3. Entraîner les modèles
-python scripts/train_gnn.py --config configs/gnn_config.yaml
-python scripts/train_cnn.py --config configs/cnn_config.yaml
+# Ou avec fichier de configuration
+python scripts/generate_data.py @configs/data_generation_example.txt
 
-# 4. Évaluer
-python scripts/evaluate.py --model gnn
+# 3. Entraîner les modèles (TODO)
+python scripts/train_gnn.py
+python scripts/train_cnn.py
+
+# 4. Évaluer (TODO)
+python scripts/evaluate.py
+```
+
+### Génération de Données Détaillée
+
+Le script `generate_data.py` utilise **WaterberryFarms** pour simuler la propagation de maladies végétales.
+
+**Usage de base :**
+```bash
+python scripts/generate_data.py \
+    --num_simulations 10 \
+    --grid_size 50 \
+    --timesteps 100 \
+    --model_type epidemic
+```
+
+**Paramètres principaux :**
+
+| Paramètre | Défaut | Description |
+|-----------|--------|-------------|
+| `--output_dir` | `data/simulations` | Répertoire de sortie |
+| `--num_simulations` | 10 | Nombre de simulations |
+| `--grid_size` | 50 | Taille de grille (NxN) |
+| `--timesteps` | 100 | Pas de temps par simulation |
+| `--model_type` | `epidemic` | Type de modèle (`epidemic` ou `dissipation`) |
+| `--output_formats` | `images graphs` | Formats de sortie (CNN et/ou GNN) |
+
+**Paramètres du modèle épidémique (SIR) :**
+
+| Paramètre | Défaut | Description |
+|-----------|--------|-------------|
+| `--p_transmission` | 0.2 | Probabilité de transmission |
+| `--infection_duration` | 5 | Durée d'infection (timesteps) |
+| `--spread_dimension` | 11 | Dimension de propagation spatiale |
+| `--infection_seeds` | -1 | Foyers initiaux (-1 = auto) |
+
+**Exemples d'utilisation :**
+
+```bash
+# Génération rapide pour test
+python scripts/generate_data.py --num_simulations 2 --timesteps 20
+
+# Dataset complet pour entraînement
+python scripts/generate_data.py \
+    --num_simulations 50 \
+    --grid_size 100 \
+    --timesteps 200 \
+    --p_transmission 0.3 \
+    --seed 42
+
+# Seulement des images pour CNN
+python scripts/generate_data.py --output_formats images --image_format png
+
+# Seulement des graphes pour GNN
+python scripts/generate_data.py --output_formats graphs
+
+# Modèle de dissipation au lieu d'épidémique
+python scripts/generate_data.py \
+    --model_type dissipation \
+    --dissipation_rate 0.9 \
+    --p_pollution 0.15
+
+# Avec fichier de configuration
+python scripts/generate_data.py @configs/data_generation_example.txt
+```
+
+**Structure de sortie :**
+
+Chaque génération crée un dossier daté dans `data/simulations/` :
+
+```
+data/simulations/generation_20260204_153000/
+├── generation_metadata.json          # Métadonnées globales
+├── sim_0000/
+│   ├── metadata.json                 # Métadonnées simulation
+│   ├── images/                       # Format CNN
+│   │   ├── t_0000.png
+│   │   ├── t_0001.png
+│   │   └── ...
+│   └── graphs/                       # Format GNN
+│       ├── t_0000.npy
+│       ├── t_0001.npy
+│       └── ...
+├── sim_0001/
+└── ...
 ```
 
 ## 📊 Methodology

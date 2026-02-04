@@ -48,6 +48,69 @@ Chaque participant ajoute une entrée pour documenter son travail. Format requis
 
 ---
 
+### [04/02/2026] - [16:00] - Simon LECUYER
+**Branche :** `main`  
+**Tâche :** Intégration de WaterberryFarms et création du script de génération de données
+
+**Modifications :**
+- **Création de `scripts/generate_data.py`** : Script complet de génération de données
+  - Import automatique de WaterberryFarms depuis le dossier parent
+  - Support des modèles épidémique (SIR) et dissipation
+  - Génération de données au format images (CNN) et graphes (GNN)
+  - Tous les paramètres configurables via ligne de commande
+  - Métadonnées JSON pour chaque génération et simulation
+  - Organisation automatique : dossier daté avec sous-dossiers par simulation
+  
+- **Mise à jour du README.md** :
+  - Section "Prérequis WaterberryFarms" expliquant la structure de dossiers requise
+  - Documentation complète des paramètres de `generate_data.py`
+  - Tableau récapitulatif des paramètres du modèle épidémique
+  - Exemples d'utilisation pour différents cas (test, entraînement, formats spécifiques)
+  - Structure de sortie détaillée des données générées
+
+**Résultats/Observations :**
+- ✅ WaterberryFarms utilisé comme bibliothèque (pas de sous-module Git)
+- ✅ Détection automatique du chemin vers WaterberryFarms
+- ✅ Génération double format par défaut : images PNG pour CNN + graphes NumPy pour GNN
+- ✅ Modèle SIR (épidémique) par défaut avec option de basculer vers dissipation
+- ✅ Organisation propre : `data/simulations/generation_TIMESTAMP/sim_XXXX/{images,graphs}/`
+- ✅ Métadonnées complètes pour traçabilité (paramètres, seed, timestamp)
+
+**Architecture de données générées :**
+```
+data/simulations/generation_20260204_160000/
+├── generation_metadata.json          # Paramètres globaux
+├── sim_0000/
+│   ├── metadata.json                 # Paramètres spécifiques
+│   ├── images/                       # Pour CNN
+│   │   └── t_XXXX.png
+│   └── graphs/                       # Pour GNN
+│       └── t_XXXX.npy (nodes, edges, features)
+```
+
+**Problèmes rencontrés :** 
+- Aucun - import relatif fonctionne correctement avec la structure actuelle
+
+**Prochaines étapes :**
+- Tester la génération avec différents paramètres
+- Créer `utils/data_loader.py` pour charger les données générées
+- Implémenter `utils/graph_builder.py` pour construire les graphes PyTorch Geometric
+- Commencer l'architecture CNN baseline
+
+**Fichiers créés :**
+1. `scripts/generate_data.py` - Script principal de génération
+2. `configs/data_generation_example.txt` - Configuration exemple
+3. `data/simulations/README.md` - Documentation des données
+
+**Résumé des fonctionnalités :**
+- ✅ Import automatique de WaterberryFarms
+- ✅ Génération double format (images + graphes)
+- ✅ Métadonnées JSON complètes
+- ✅ Organisation propre des données générées
+- ✅ Configuration via ligne de commande ou fichier texte
+
+---
+
 <!-- Ajoutez vos entrées ci-dessous en respectant le format -->
 
 ### [JJ/MM/AAAA] - [HH:MM] - Prénom NOM

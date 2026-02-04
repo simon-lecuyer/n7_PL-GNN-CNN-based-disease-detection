@@ -3,10 +3,13 @@
 ## Scripts à Implémenter (`scripts/`)
 
 ### Semaine 1 : Data Generation
-- [ ] `scripts/generate_data.py`
-  - Générer des données de simulation WaterberryFarms
-  - Paramètres configurables via YAML
-  - Sauvegarder dans `data/raw/`
+- [x] `scripts/generate_data.py` ✅ **IMPLÉMENTÉ** (04/02/2026)
+  - Génère des données de simulation WaterberryFarms
+  - Paramètres configurables via arguments CLI
+  - Sauvegarde dans `data/simulations/generation_TIMESTAMP/`
+  - Formats : images (CNN) et graphes (GNN)
+  - Modèles : épidémique (SIR) et dissipation
+  - Métadonnées JSON complètes
   
 ### Semaine 2 : Training Scripts
 - [ ] `scripts/train_gnn.py`
