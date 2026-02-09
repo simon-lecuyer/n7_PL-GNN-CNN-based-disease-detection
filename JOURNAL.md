@@ -111,6 +111,63 @@ data/simulations/generation_20260204_160000/
 
 ---
 
+### [09/02/2026] - [17:00] - Simon LECUYER
+**Branche :** `Pipeline-DatatoDatasets`  
+**Tâche :** Création de la pipeline complète de données pour comparaison CNN/GNN
+
+**Modifications :**
+- **Création de `scripts/preprocess_data.py`** : Prétraitement avancé des simulations
+  - Crop automatique des zones infectées avec marge configurable
+  - Redimensionnement intelligent pour CNN (target_size)
+  - Normalisation/standardisation des données
+  - Features spatiales pour GNN (coordonnées normalisées)
+  - Statistiques automatiques sur les données preprocessées
+  - Support multi-format (CNN + GNN simultané)
+  
+- **Création de `scripts/create_datasets.py`** : Génération de datasets PyTorch
+  - Split train/val/test stratifié et reproductible
+  - Stratification par simulation, infection_level, ou timestep
+  - Support des séquences temporelles (LSTM, Transformer)
+  - Métadonnées complètes pour traçabilité
+  - Statistiques par split
+  
+- **Création de `utils/datasets.py`** : Classes PyTorch Dataset
+  - DiseaseDetectionDataset pour CNN et GNN
+  - TemporalDiseaseDataset pour séquences temporelles
+  - Fonctions collate personnalisées
+  - Helper get_dataloader() pour simplifier l'usage
+  
+- **Documentation complète** : `data/PIPELINE.md`
+  - Guide complet des 4 étapes de la pipeline
+  - Exemples d'utilisation pour chaque script
+  - Stratégies de comparaison CNN vs GNN
+  - Commandes rapides et troubleshooting
+
+**Résultats/Observations :**
+- ✅ Pipeline complète testée et fonctionnelle
+- ✅ Garantit la comparabilité CNN/GNN (mêmes données sources)
+- ✅ Split reproductible avec stratification
+- ✅ Prétraitement optimisé (crop sur infection, normalisation)
+- ✅ Format CNN: 64x64 (configurable), format GNN: graphe avec features enrichies
+- ✅ Métadonnées JSON à chaque étape pour traçabilité
+
+**Architecture de la pipeline :**
+```
+Simulations → Prétraitement → Datasets → Entraînement
+    (brutes)     (optimisées)  (PyTorch)    (modèles)
+```
+
+**Problèmes rencontrés :** 
+- Aucun - pipeline complète et robuste
+
+**Prochaines étapes :**
+- Implémenter les modèles CNN baseline
+- Implémenter les modèles GNN baseline
+- Scripts d'entraînement avec la pipeline
+- Métriques de comparaison CNN vs GNN
+
+---
+
 <!-- Ajoutez vos entrées ci-dessous en respectant le format -->
 
 ### [JJ/MM/AAAA] - [HH:MM] - Prénom NOM

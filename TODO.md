@@ -33,9 +33,18 @@
   - Simulation de drone path planning
   
 ### Utilitaires
-- [ ] `scripts/preprocess_data.py`
+- [x] `scripts/preprocess_data.py` ✅ **IMPLÉMENTÉ** (09/02/2026)
   - Prétraitement des données brutes
-  - Normalisation, augmentation
+  - Crop automatique, redimensionnement
+  - Normalisation/standardisation
+  - Features spatiales pour GNN
+  - Statistiques automatiques
+
+- [x] `scripts/create_datasets.py` ✅ **IMPLÉMENTÉ** (09/02/2026)
+  - Création datasets PyTorch avec split train/val/test
+  - Stratification configurable
+  - Support séquences temporelles
+  - Métadonnées complètes
   
 - [ ] `scripts/visualize_results.py`
   - Génération de figures pour rapport
