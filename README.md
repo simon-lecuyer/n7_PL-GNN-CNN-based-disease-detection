@@ -146,19 +146,29 @@ conda create -n N7_PL python=3.10 -y && conda activate N7_PL && conda install py
 # 1. Activer l'environnement
 conda activate N7_PL
 
-# 2. Générer les données (depuis le dossier du projet)
-python scripts/generate_data.py --num_simulations 5 --grid_size 50 --timesteps 100
+# 2. Pipeline complète de données
+# Génération
+python scripts/generate_data.py --num_simulations 50 --grid_size 100 --timesteps 200 --seed 42
 
-# Ou avec fichier de configuration
-python scripts/generate_data.py @configs/data_generation_example.txt
+# Prétraitement (optimisé pour CNN/GNN)
+python scripts/preprocess_data.py \
+    --input data/simulations/generation_XXX \
+    --crop --normalize --add_spatial_features
 
-# 3. Entraîner les modèles (TODO)
-python scripts/train_gnn.py
-python scripts/train_cnn.py
+# Création datasets train/val/test
+python scripts/create_datasets.py \
+    --input data/processed/processed_XXX \
+    --stratify_by simulation --seed 42
 
-# 4. Évaluer (TODO)
-python scripts/evaluate.py
+# 3. Entraînement (TODO)
+python scripts/train_cnn.py --dataset data/processed/processed_XXX/datasets/cnn
+python scripts/train_gnn.py --dataset data/processed/processed_XXX/datasets/gnn
+
+# 4. Évaluation et comparaison (TODO)
+python scripts/evaluate.py --models cnn gnn
 ```
+
+📖 **Guide détaillé:** Voir [data/PIPELINE.md](data/PIPELINE.md) pour la documentation complète de la pipeline
 
 ### Génération de Données Détaillée
 

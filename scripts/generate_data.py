@@ -306,11 +306,11 @@ def main():
     print(f"{'='*70}")
     print(f"  GÉNÉRATION DE DONNÉES - WaterberryFarms x N7 Projet Long")
     print(f"{'='*70}")
-    print(f"  Répertoire de sortie: {output_base_dir}")
+    print(f"  Repertoire de sortie: {output_base_dir}")
     print(f"  Nombre de simulations: {args.num_simulations}")
     print(f"  Taille de grille: {args.grid_size}x{args.grid_size}")
     print(f"  Pas de temps: {args.timesteps}")
-    print(f"  Modèle: {args.model_type}")
+    print(f"  Modele: {args.model_type}")
     print(f"  Formats de sortie: {', '.join(args.output_formats)}")
     print(f"{'='*70}\n")
     
@@ -334,9 +334,9 @@ def main():
         json.dump(global_metadata, f, indent=2)
     
     print(f"\n{'='*70}")
-    print(f"  ✓ Génération terminée avec succès !")
-    print(f"  ✓ Données sauvegardées dans: {output_base_dir}")
-    print(f"  ✓ {args.num_simulations} simulations × {args.timesteps} timesteps générées")
+    print(f"  Generation terminee avec succes")
+    print(f"  Donnees sauvegardees dans: {output_base_dir}")
+    print(f"  {args.num_simulations} simulations x {args.timesteps} timesteps generees")
     print(f"{'='*70}\n")
 
 
