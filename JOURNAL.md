@@ -168,6 +168,71 @@ Simulations → Prétraitement → Datasets → Entraînement
 
 ---
 
+### [12/02/2026] - [16:30] - Simon LECUYER
+**Branche :** `main`  
+**Tâche :** Correction critique de la pipeline de données - Confusion SIR et datasets
+
+**Modifications :**
+- **Correction majeure dans `scripts/generate_data.py`** :
+  - Ajout de la capture de `env.status` (états SIR réels) en plus de `env.value`
+  - Permet d'avoir accès aux vrais états : 0=Susceptible, >0=Infected, -1=Recovered, -2=Immune
+  
+- **Correction critique dans `scripts/preprocess_data.py`** :
+  - **Inversion de la sémantique** : `env.value` de WaterberryFarms a 1.0=sain, 0.5=infecté, 0.0=détruit
+  - Maintenant transformé en : 1.0=présence maladie, 0.0=sain (sémantique correcte pour détection)
+  - Correction du seuil de crop : `> 0.4` au lieu de `> 0.1` (qui capturait tout)
+  - Remplacement PIL (uint8) par `scipy.ndimage.zoom` pour éviter la quantification
+  - Implémentation correcte de la normalisation (était un no-op avant)
+  - Propagation du `status` SIR pour créer des labels supervisés
+  
+- **Correction dans `scripts/create_datasets.py`** :
+  - **Split unifié CNN/GNN** : le split est fait UNE SEULE FOIS sur les paires (sim_id, timestep)
+  - Le même split est appliqué aux deux formats pour garantir la comparabilité
+  - Évite les divergences dues aux calculs d'infection_level légèrement différents
+  
+- **Ajout de labels dans `utils/datasets.py`** :
+  - Création de labels à partir du status : 0=Sain (S), 1=Infecté (I), 2=Recovered (R)
+  - Les datasets retournent maintenant `(features, label)` pour l'entraînement supervisé
+  - Support classification SIR par pixel (CNN) ou par nœud (GNN)
+  
+- **Nettoyage du dépôt** :
+  - Suppression de 3 générations/preprocessing sur 4 (doublons identiques avec même seed)
+  - Garde uniquement `generation_20260204_173051` et `processed_20260209_165358`
+
+**Résultats/Observations :**
+- ⚠️ **Problème critique identifié** : Confusion totale sur la sémantique de `env.value`
+  - Documentation parlait de "Disease Intensity" mais `env.value` représente la "valeur agricole restante"
+  - 1.0 = plants sains (Susceptible), 0.5 = infectés, 0.0 = détruits/recovered
+  - Toute la pipeline traitait les données à l'envers !
+  
+- ✅ **CNN et GNN utilisent bien les mêmes simulations** (doute initial infondé)
+  - Même source : fichiers graphes `.npy` communs
+  - Mais le split était fait indépendamment → risque de divergence corrigé
+  
+- ✅ **Perte d'information évitée** :
+  - Conversion float→uint8→resize→float perdait la distinction 0.0/0.5/1.0
+  - Remplacé par resize direct en float32
+  
+- ⚠️ **Données ridiculement petites** (2 sims × 10 timesteps = 20 samples)
+  - Inutilisable pour entraîner quoi que ce soit
+  - 3 samples en test/val → aucune métrique significative
+
+**Problèmes rencontrés :** 
+- Architecture pipeline bien conçue mais mauvaise compréhension du modèle SIR de WaterberryFarms
+- Manque de validation des données générées (aurait dû détecter la sémantique inversée)
+- Génération massive de doublons (même seed, mêmes paramètres)
+
+**Prochaines étapes :**
+- Régénérer des données avec les corrections (50-100 simulations × 100+ timesteps)
+- Tester le nouveau preprocessing avec `demo.sh` ou commandes manuelles
+- Vérifier que les labels SIR sont correctement extraits
+- Implémenter les modèles CNN/GNN baseline avec supervision (classification S/I/R)
+- Ou utiliser prédiction temporelle (état t → état t+1) comme tâche
+
+**Impact :** Corrections critiques qui changent fondamentalement la sémantique des données. **Nécessite régénération complète** des datasets pour exploiter les corrections.
+
+---
+
 <!-- Ajoutez vos entrées ci-dessous en respectant le format -->
 
 ### [JJ/MM/AAAA] - [HH:MM] - Prénom NOM
@@ -227,4 +292,5 @@ Simulations → Prétraitement → Datasets → Entraînement
 
 ---
 
-**Dernière mise à jour :** 03/02/2026 - Simon LECUYER
+**Dernière mise à jour :** 12/02/2026 - Simon LECUYER
+
