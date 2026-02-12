@@ -1,8 +1,8 @@
-experiment_name: "gnn_simple_v1"
+experiment_name: "gnn_temporal_v1"
 
 data:
-  train_path: "data/processed/processed_20260211_121548/datasets/gnn/train.json"
-  val_path: "data/processed/processed_20260211_121548/datasets/gnn/val.json"
+  train_path: "data/processed/processed_20260211_121548/datasets/gnn/train_seq5.json"
+  val_path: "data/processed/processed_20260211_121548/datasets/gnn/val_seq5.json"
 
 model:
   in_channels: 3      # [infection, normalized_x, normalized_y]
@@ -10,6 +10,7 @@ model:
   num_layers: 3
   out_channels: 1
   dropout: 0.2
+  type: "temporal"     # Options: "spatial", "temporal"
 
 training:
   epochs: 100

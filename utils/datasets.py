@@ -268,6 +268,23 @@ def collate_fn_temporal_cnn(batch):
         return sequences_batch, targets_batch
 
 
+def collate_fn_temporal_gnn(batch):
+    """
+    Custom collate function for TemporalDiseaseDataset.
+
+    Each batch element is:
+        (sequence, target, metadata)
+
+    We return lists without merging dict keys.
+    """
+
+    sequences = [item[0] for item in batch]
+    targets = [item[1] for item in batch]
+    metadatas = [item[2] for item in batch]
+
+    return sequences, targets, metadatas
+
+
 def get_dataloader(
     split_file: str,
     format: str,
@@ -303,7 +320,7 @@ def get_dataloader(
             transform=transform,
             **kwargs
         )
-        collate_fn = collate_fn_temporal_cnn if format == "cnn" else None
+        collate_fn = collate_fn_temporal_cnn if format == "cnn" else collate_fn_temporal_gnn
     else:
         dataset = DiseaseDetectionDataset(
             split_file,

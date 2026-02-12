@@ -1,6 +1,7 @@
 import sys
 import os
 import yaml
+import argparse
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
@@ -14,6 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 # Assumes you have created these files as discussed
 from utils.datasets import DiseaseDetectionDataset, get_dataloader
 from gnn.models.disease_gnn import DiseaseGNN
+from gnn.models.temporal_disease_gnn import TemporalDiseaseGNN    
 
 def get_device(cfg_device="auto"):
     """
@@ -59,40 +61,42 @@ def train(config_path="configs/gnn_config.yaml"):
     # 2. Setup Device
     device = get_device(config['training'].get('device', 'auto'))
     print(f"Training on device: {device}")
+    is_temporal = (config["model"]["type"]=="temporal")
 
     # 3. Prepare Data
-    print("Loading Datasets...")
-    try:
-        train_dataset = DiseaseDetectionDataset(config['data']['train_path'], format='gnn', return_metadata=True)
-        val_dataset = DiseaseDetectionDataset(config['data']['val_path'], format='gnn', return_metadata=True)
-    except Exception as e:
-        print(f"Error loading datasets: {e}")
-        print("   Did you run scripts/create_datasets.py?")
-        return
-
     train_loader = get_dataloader(
-        "data/processed/processed_20260211_121548/datasets/gnn/train.json",
+        config["data"]["train_path"],
         format="gnn",
         batch_size=16,
-        shuffle=True
+        shuffle=True,
+        is_temporal=is_temporal
     )
     val_loader = get_dataloader(
-        "data/processed/processed_20260211_121548/datasets/gnn/train.json",
+        config["data"]["val_path"],
         format="gnn",
         batch_size=16,
-        shuffle=True
+        shuffle=True,
+        is_temporal=is_temporal
     )
 
     # 4. Initialize Model & Move to Device
-    print("🧠 Initializing SpatioTemporalGNN...")
+    print("Initializing GNN...")
     model_cfg = config["model"]
-    model = DiseaseGNN(
-        in_channels=model_cfg["in_channels"],
-        hidden_dim=model_cfg["hidden_dim"],
-        num_layers=model_cfg["num_layers"],
-        out_channels=model_cfg["out_channels"],
-        dropout=model_cfg["dropout"]
-    ).to(device)
+    if not is_temporal:
+        model = DiseaseGNN(
+            in_channels=model_cfg["in_channels"],
+            hidden_dim=model_cfg["hidden_dim"],
+            num_layers=model_cfg["num_layers"],
+            out_channels=model_cfg["out_channels"],
+            dropout=model_cfg["dropout"]
+        ).to(device)
+    else:
+        model = TemporalDiseaseGNN(
+            in_channels=model_cfg["in_channels"],
+            hidden_dim=model_cfg["hidden_dim"],
+            num_layers=model_cfg["num_layers"],
+            dropout=model_cfg["dropout"]
+        ).to(device)
 
     # 5. Optimizer & Loss
     optimizer_name = config['training']['optimizer'].lower()
@@ -108,7 +112,6 @@ def train(config_path="configs/gnn_config.yaml"):
     criterion = nn.MSELoss()
 
     # 6. Training Loop
-    # Create runs directory if it doesn't exist
     log_dir = f"runs/{config['experiment_name']}"
     os.makedirs(log_dir, exist_ok=True)
     writer = SummaryWriter(log_dir)
@@ -116,86 +119,140 @@ def train(config_path="configs/gnn_config.yaml"):
     epochs = config['training']['epochs']
 
     model.train()
-    for epoch in range(epochs):
-        total_loss = 0.0
+    print("Starting training...")
+    if model_cfg["type"] == "spatial":
+        for epoch in range(epochs):
+            total_loss = 0.0
 
-        for graphs in train_loader:
-            batch_loss = 0.0
+            for graphs in train_loader:
+                batch_loss = 0.0
 
-            for graph in graphs: 
-                x = graph["node_features"].float().to(device)
-                edge_index = graph["edges"].long().to(device)
-                if edge_index.shape[0] != 2:
-                    edge_index = edge_index.t()
-                y=x[:, 0].unsqueeze(1)
+                for graph in graphs: 
+                    x = graph["node_features"].float().to(device)
+                    edge_index = graph["edges"].long().to(device)
+                    if edge_index.shape[0] != 2:
+                        edge_index = edge_index.t()
+                    y=x[:, 0].unsqueeze(1)
 
-                pred = model(x, edge_index)
+                    pred = model(x, edge_index)
+                    loss = criterion(pred, y)
+
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    batch_loss += loss.item()
+                
+                total_loss += batch_loss
+
+            train_loss = total_loss / len(train_loader)
+            print(f"Epoch {epoch+1:03d} | Loss = {train_loss:.6f}")
+    else:
+        for epoch in range(epochs):
+            total_loss = 0.0
+            for sequence, target, metadata in train_loader:
+                sequence = sequence[0]  # remove batch wrapper
+                target = target[0]
+                for g in sequence:
+                    g["node_features"] = g["node_features"].to(device)
+                    g["edges"] = g["edges"].to(device)
+
+                target["node_features"] = target["node_features"].to(device)
+                target["edges"] = target["edges"].to(device)
+
+                # Target infection values
+                y = target["node_features"][:, 0].unsqueeze(1)
+                pred = model(sequence)
                 loss = criterion(pred, y)
-
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                batch_loss += loss.item()
-            
-            total_loss += batch_loss
 
-        avg_loss = total_loss / len(train_loader)
-        print(f"Epoch {epoch+1:03d} | Loss = {avg_loss:.6f}")
-        
-    #     # Training Step
-    #     pbar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}", leave=False)
-    #     for batch in pbar:
-    #         print(batch)
-    #         # CRITICAL: Move batch to GPU
-    #         batch = batch.to(device)
-            
-    #         optimizer.zero_grad()
-            
-    #         # Forward pass
-    #         # We pass edge_weight if it exists (for distance-weighted graphs)
-    #         out = model(batch.x, batch.edge_index, getattr(batch, 'edge_attr', None), batch.batch)
-            
-    #         # Reshape target if necessary to match output [N, 1]
-    #         loss = criterion(out, batch.y)
-            
-    #         loss.backward()
-    #         optimizer.step()
-    #         total_loss += loss.item()
-            
-    #         pbar.set_postfix({'loss': loss.item()})
+                total_loss += loss.item()
+            train_loss = total_loss / len(train_loader)
+            print(f"[Epoch {epoch+1:03d}] Train Loss = {train_loss:.6f}")
 
-    #     avg_train_loss = total_loss / len(train_loader)
-        
-    #     # Validation Step
-    #     model.eval()
-    #     val_loss = 0
-    #     with torch.no_grad():
-    #         for batch in val_loader:
-    #             # CRITICAL: Move batch to GPU
-    #             batch = batch.to(device)
-                
-    #             out = model(batch.x, batch.edge_index, getattr(batch, 'edge_attr', None), batch.batch)
-    #             loss = criterion(out, batch.y)
-    #             val_loss += loss.item()
-        
-    #     avg_val_loss = val_loss / len(val_loader)
-        
-    #     # Logging
-    #     print(f"Epoch {epoch+1}: Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
-    #     writer.add_scalar('Loss/train', avg_train_loss, epoch)
-    #     writer.add_scalar('Loss/val', avg_val_loss, epoch)
+    val_loss = evaluate(
+            model,
+            val_loader,
+            criterion,
+            device,
+            temporal=(model_cfg["type"] == "temporal")
+        )
+    
+    writer.add_scalar("Loss/train", train_loss, epoch)
+    writer.add_scalar("Loss/val", val_loss, epoch)
+    writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)
 
-    #     # Save Checkpoint (e.g., every 10 epochs or if best val loss)
-    #     if (epoch + 1) % 10 == 0:
-    #         os.makedirs("checkpoints", exist_ok=True)
-    #         ckpt_path = f"checkpoints/{config['experiment_name']}_ep{epoch+1}.pth"
-    #         torch.save(model.state_dict(), ckpt_path)
+    print(f"\nEpoch {epoch+1:03d}")
+    print(f"   Train Loss: {train_loss:.6f}")
+    print(f"   Val Loss:   {val_loss:.6f}")
 
-    # # Final Save
-    # os.makedirs("checkpoints", exist_ok=True)
-    # torch.save(model.state_dict(), f"checkpoints/{config['experiment_name']}_final.pth")
-    # print("✅ Training Complete. Model Saved.")
-    # writer.close()
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+
+        ckpt_path = os.path.join(
+            ckpt_dir,
+            f"{config['experiment_name']}_best.pth"
+        )
+
+        torch.save({
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "val_loss": best_val_loss,
+            "config": config
+        }, ckpt_path)
+
+        print(f"   ✅ Saved new best checkpoint: {ckpt_path}")
+
+def evaluate(model, val_loader, criterion, device, temporal=False):
+    model.eval()
+    total_loss = 0.0
+
+    with torch.no_grad():
+        if not temporal:
+            for graphs in val_loader:
+                for graph in graphs:
+                    x = graph["node_features"].float().to(device)
+
+                    edge_index = graph["edges"].long().to(device)
+                    if edge_index.shape[0] != 2:
+                        edge_index = edge_index.t()
+
+                    y = x[:, 0].unsqueeze(1)
+
+                    pred = model(x, edge_index)
+                    loss = criterion(pred, y)
+
+                    total_loss += loss.item()
+
+        else:
+            for sequence, target, metadata in val_loader:
+
+                # Fix batch wrapper
+                sequence = sequence[0]
+                target = target
+
+                if isinstance(target, list):
+                    target = target[0]
+
+                # Move graphs
+                for g in sequence:
+                    g["node_features"] = g["node_features"].float().to(device)
+                    g["edges"] = g["edges"].long().to(device)
+
+                target["node_features"] = target["node_features"].float().to(device)
+                target["edges"] = target["edges"].long().to(device)
+
+                y = target["node_features"][:, 0].unsqueeze(1)
+
+                pred = model(sequence)
+                loss = criterion(pred, y)
+
+                total_loss += loss.item()
+
+    return total_loss / len(val_loader)
+
 
 if __name__ == "__main__":
     train()
