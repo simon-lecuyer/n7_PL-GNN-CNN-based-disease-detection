@@ -185,18 +185,23 @@ def save_as_image(data, output_path, image_format):
         plt.close()
 
 
-def save_as_graph(data, output_path, timestep):
+def save_as_graph(data, output_path, timestep, status_data=None):
     """Sauvegarde les données sous forme de graphe spatial."""
     height, width = data.shape
     
     # Créer les coordonnées des nœuds
     nodes = []
     node_features = []
+    node_status = []  # Ajouter le status SIR
     
     for i in range(height):
         for j in range(width):
             nodes.append((i, j))
             node_features.append(data[i, j])
+            if status_data is not None:
+                node_status.append(status_data[i, j])
+            else:
+                node_status.append(0.0)
     
     # Créer les arêtes (connexions 4-voisinage)
     edges = []
@@ -214,6 +219,7 @@ def save_as_graph(data, output_path, timestep):
     graph_data = {
         "nodes": np.array(nodes),
         "node_features": np.array(node_features),
+        "node_status": np.array(node_status),  # Ajouter status SIR
         "edges": np.array(edges),
         "timestep": timestep,
         "shape": (height, width)
@@ -274,6 +280,9 @@ def run_simulation(sim_id, args, output_base_dir):
     # Simulation temporelle
     print(f"\n  Simulation {sim_id}: Exécution de {args.timesteps} pas de temps...")
     for t in tqdm(range(args.timesteps), desc=f"  Sim {sim_id}", leave=False):
+        # Capturer status pour le modèle épidémique
+        status_data = env.status if hasattr(env, 'status') else None
+        
         # Sauvegarder les données au format image
         if "images" in args.output_formats:
             image_path = images_dir / f"t_{t:04d}"
@@ -282,7 +291,7 @@ def run_simulation(sim_id, args, output_base_dir):
         # Sauvegarder les données au format graphe
         if "graphs" in args.output_formats:
             graph_path = graphs_dir / f"t_{t:04d}.npy"
-            save_as_graph(env.value, graph_path, t)
+            save_as_graph(env.value, graph_path, t, status_data)
         
         # Faire évoluer l'environnement
         env.proceed(delta_t=1.0)
