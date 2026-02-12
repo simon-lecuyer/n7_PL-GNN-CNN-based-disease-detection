@@ -1,0 +1,19 @@
+experiment_name: "gnn_simple_v1"
+
+data:
+  train_path: "data/processed/processed_20260211_121548/datasets/gnn/train.json"
+  val_path: "data/processed/processed_20260211_121548/datasets/gnn/val.json"
+
+model:
+  in_channels: 3      # [infection, normalized_x, normalized_y]
+  hidden_dim: 64
+  num_layers: 3
+  out_channels: 1
+  dropout: 0.2
+
+training:
+  epochs: 100
+  batch_size: 32
+  lr: 0.001
+  optimizer: "adam"
+  device: "auto"      # Options: "auto", "cuda", "mps", "cpu"
