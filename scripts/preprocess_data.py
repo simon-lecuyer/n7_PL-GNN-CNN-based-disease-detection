@@ -138,14 +138,14 @@ def crop_to_infected_region(data, margin=5):
     Crop l'image pour se concentrer sur la région infectée.
     
     Args:
-        data: Array 2D de la grille
+        data: Array 2D de la grille (avec sémantique inversée: 1.0 = infecté)
         margin: Marge autour de la région détectée
         
     Returns:
         data_cropped, (x_min, y_min, x_max, y_max)
     """
-    # Trouver les zones avec infection
-    infected = data > 0.1  # Seuil minimal d'infection
+    # Trouver les zones avec infection (data inversé: 1.0 = infecté, 0.0 = sain)
+    infected = data > 0.4  # Seuil: infecté (0.5→1.0) et détruit (1.0→1.0)
     
     if not infected.any():
         # Pas d'infection, retourner l'original
@@ -172,14 +172,26 @@ def preprocess_cnn(graph_file, args):
     Prétraite les données pour CNN.
     
     Returns:
-        dict avec 'data', 'original_shape', 'crop_bbox' si applicable
+        dict avec 'data', 'original_shape', 'crop_bbox', 'status' si applicable
     """
     # Charger le graphe brut
     graph_data = np.load(graph_file, allow_pickle=True).item()
     height, width = graph_data["shape"]
     
-    # Reconstruire la grille
-    grid = graph_data["node_features"].reshape((height, width))
+    # Reconstruire la grille - INVERSER la sémantique (1.0=infecté, 0.0=sain)
+    # env.value: 1.0=sain, 0.5=infecté, 0.0=détruit
+    # Inversion: 0.0→1.0 (sain→infecté inversé), 0.5→0.5, 1.0→0.0 (détruit→sain inversé)
+    # Mieux: (1 - value) pour que 1.0=sain→0.0, 0.5=infecté→0.5, 0.0=détruit→1.0
+    # Mais pour la détection, on veut: 1.0=présence maladie, 0.0=sain
+    # Donc on garde 0.5 pour infecté et on mappe destroyed aussi comme infecté
+    grid_raw = graph_data["node_features"].reshape((height, width))
+    # Inverser: 1.0 (sain) → 0.0, 0.5 (infecté) → 1.0, 0.0 (détruit) → 1.0
+    grid = np.where(grid_raw == 1.0, 0.0, 1.0)  # Sain=0, Infecté/Détruit=1
+    
+    # Capturer status si disponible
+    status_grid = None
+    if "node_status" in graph_data:
+        status_grid = graph_data["node_status"].reshape((height, width))
     
     # Crop si demandé
     crop_bbox = None
@@ -188,29 +200,42 @@ def preprocess_cnn(graph_file, args):
     
     original_shape = grid.shape
     
-    # Redimensionner
+    # Redimensionner SANS passer par uint8 pour éviter la quantification
     if grid.shape != (args.target_size, args.target_size):
-        # Convertir en image PIL pour resize de qualité
-        img = Image.fromarray((grid * 255).astype(np.uint8), mode="L")
-        img = img.resize((args.target_size, args.target_size), Image.BILINEAR)
-        grid = np.array(img) / 255.0
+        # Utiliser scipy ou skimage pour resize en float directement
+        from scipy.ndimage import zoom
+        zoom_factors = (args.target_size / grid.shape[0], args.target_size / grid.shape[1])
+        grid = zoom(grid, zoom_factors, order=1)  # order=1 = bilinear
     
     # Normalisation
     if args.normalize:
-        # Déjà en [0, 1] depuis WaterberryFarms
-        pass
+        # Normaliser en [0, 1] (devrait déjà être le cas après inversion)
+        grid = np.clip(grid, 0.0, 1.0)
     elif args.standardize:
         mean = grid.mean()
         std = grid.std()
         if std > 0:
             grid = (grid - mean) / std
     
-    return {
+    result = {
         "data": grid.astype(np.float32),
         "original_shape": original_shape,
         "crop_bbox": crop_bbox,
         "timestep": graph_data["timestep"]
     }
+    
+    # Ajouter status si disponible (pour créer des labels)
+    if status_grid is not None:
+        if crop_bbox:
+            x_min, y_min, x_max, y_max = crop_bbox
+            status_grid = status_grid[y_min:y_max, x_min:x_max]
+        if status_grid.shape != (args.target_size, args.target_size):
+            from scipy.ndimage import zoom
+            zoom_factors = (args.target_size / status_grid.shape[0], args.target_size / status_grid.shape[1])
+            status_grid = zoom(status_grid, zoom_factors, order=0)  # order=0 = nearest pour garder les catégories
+        result["status"] = status_grid.astype(np.float32)
+    
+    return result
 
 
 def preprocess_gnn(graph_file, args):
@@ -218,15 +243,19 @@ def preprocess_gnn(graph_file, args):
     Prétraite les données pour GNN.
     
     Returns:
-        dict avec 'nodes', 'edges', 'node_features', 'edge_features' optionnels
+        dict avec 'nodes', 'edges', 'node_features', 'node_status' optionnel
     """
     # Charger le graphe brut
     graph_data = np.load(graph_file, allow_pickle=True).item()
     
     nodes = graph_data["nodes"]  # (N, 2) coordonnées
-    features = graph_data["node_features"]  # (N,)
+    features_raw = graph_data["node_features"]  # (N,)
     edges = graph_data["edges"]  # (E, 2)
     shape = graph_data["shape"]
+    status = graph_data.get("node_status", None)  # (N,) status SIR
+    
+    # Inverser la sémantique des features (1.0=sain → 0.0, 0.5=infecté → 1.0)
+    features = np.where(features_raw == 1.0, 0.0, 1.0)
     
     # Normaliser les coordonnées si demandé
     if args.add_spatial_features:
@@ -260,13 +289,19 @@ def preprocess_gnn(graph_file, args):
         )
         edges = new_edges
     
-    return {
+    result = {
         "nodes": nodes.astype(np.int32),
         "node_features": node_features.astype(np.float32),
         "edges": edges.astype(np.int32),
         "shape": shape,
         "timestep": graph_data["timestep"]
     }
+    
+    # Ajouter status si disponible (pour créer des labels)
+    if status is not None:
+        result["node_status"] = status.astype(np.float32)
+    
+    return result
 
 
 def process_simulation(sim_dir, output_dir, args, sim_id):

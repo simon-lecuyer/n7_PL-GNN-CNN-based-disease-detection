@@ -48,7 +48,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.colors import Normalize
-import seaborn as sns
+try:
+    import seaborn as sns
+except ImportError:
+    sns = None
 
 
 def parse_args():
