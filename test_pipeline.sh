@@ -1,4 +1,4 @@
-#!/bin/bash
+ouai#!/bin/bash
 
 # Script de test de la pipeline complete
 # Execute une demonstration complete: generation -> preprocessing -> datasets
