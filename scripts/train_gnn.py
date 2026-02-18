@@ -17,6 +17,22 @@ from utils.datasets import DiseaseDetectionDataset, get_dataloader
 from gnn.models.disease_gnn import DiseaseGNN
 from gnn.models.temporal_disease_gnn import TemporalDiseaseGNN    
 
+checkpoint_dir = "gnn/checkpoints"
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="GNN training"
+    )
+    
+    parser.add_argument(
+        "--cfg",
+        type=str,
+        default="configs/gnn_config.yaml",
+        help="Config file path"
+    )
+
+    return parser.parse_args()
+
 def get_device(cfg_device="auto"):
     """
     Select computation device.
@@ -121,21 +137,39 @@ def train(config_path="configs/gnn_config.yaml"):
     model.train()
     print("Starting training...")
     if model_cfg["type"] == "spatial":
+        mask_threshold = 0.3
+        if 'mask' in config['training'].keys():
+            mask_threshold = config['training']['mask']
         for epoch in range(epochs):
+
+            # 1. Train
+
             total_loss = 0.0
 
-            for graphs in train_loader:
+            train_pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs} [Train]")
+            for graphs in train_pbar:
                 batch_loss = 0.0
 
                 for graph in graphs: 
+
                     x = graph["node_features"].float().to(device)
                     edge_index = graph["edges"].long().to(device)
                     if edge_index.shape[0] != 2:
                         edge_index = edge_index.t()
                     y=x[:, 0].unsqueeze(1)
 
-                    pred = model(x, edge_index)
-                    loss = criterion(pred, y)
+                    num_nodes = x.size(0)
+                    hidden_nodes_mask = torch.rand(num_nodes, device=device) < mask_threshold
+
+                    x_masked = x.clone()
+                    x_masked[hidden_nodes_mask, 0] = 0.0
+                    observed_flag = torch.ones(num_nodes, 1, device=device)
+                    observed_flag[hidden_nodes_mask] = 0.0
+
+                    x_augmented = torch.cat([x_masked, observed_flag], dim=1)
+
+                    pred = model(x_augmented, edge_index)
+                    loss = criterion(pred[hidden_nodes_mask], y[hidden_nodes_mask])
 
                     optimizer.zero_grad()
                     loss.backward()
@@ -143,9 +177,61 @@ def train(config_path="configs/gnn_config.yaml"):
                     batch_loss += loss.item()
                 
                 total_loss += batch_loss
+                train_pbar.set_postfix(loss=batch_loss)
 
-            train_loss = total_loss / len(train_loader)
-            print(f"Epoch {epoch+1:03d} | Loss = {train_loss:.6f}")
+            avg_train_loss = total_loss / len(train_loader)
+            
+            # 2. Validation
+
+            model.eval()
+            total_val_loss = 0.0
+            val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]")
+            with torch.random.fork_rng(devices=[device]):
+                torch.manual_seed(config['training']['seed'])
+                with torch.no_grad():
+                    for graphs in val_pbar:
+
+                        batch_loss = 0.0
+
+                        for graph in graphs: 
+
+                            x = graph["node_features"].float().to(device)
+                            edge_index = graph["edges"].long().to(device)
+
+                            if edge_index.shape[0] != 2:
+                                edge_index = edge_index.t()
+
+                            y = x[:, 0].unsqueeze(1)
+
+                            # ---- Masking (same as training) ----
+                            num_nodes = x.size(0)
+                            hidden_nodes_mask = torch.rand(num_nodes, device=device) < mask_threshold
+
+                            x_masked = x.clone()
+                            x_masked[hidden_nodes_mask, 0] = 0.0
+
+                            observed_flag = torch.ones(num_nodes, 1, device=device)
+                            observed_flag[hidden_nodes_mask] = 0.0
+
+                            x_augmented = torch.cat([x_masked, observed_flag], dim=1)
+
+                            # ---- Forward ----
+                            pred = model(x_augmented, edge_index)
+
+                            loss = criterion(pred[hidden_nodes_mask], y[hidden_nodes_mask])
+
+                            batch_loss += loss.item()
+
+                        total_val_loss += batch_loss
+                        val_pbar.set_postfix(val_loss=batch_loss)
+                    avg_val_loss = total_val_loss / len(val_loader)
+
+            print(
+                f"Epoch {epoch+1:03d} | "
+                f"Train Loss = {avg_train_loss:.6f} | "
+                f"Val Loss = {avg_val_loss:.6f}"
+            )
+
     else:
         for epoch in range(epochs):
             total_loss = 0.0
@@ -171,88 +257,11 @@ def train(config_path="configs/gnn_config.yaml"):
             train_loss = total_loss / len(train_loader)
             print(f"[Epoch {epoch+1:03d}] Train Loss = {train_loss:.6f}")
 
-    val_loss = evaluate(
-            model,
-            val_loader,
-            criterion,
-            device,
-            temporal=(model_cfg["type"] == "temporal")
-        )
-    
-    writer.add_scalar("Loss/train", train_loss, epoch)
-    writer.add_scalar("Loss/val", val_loss, epoch)
-    writer.add_scalar("LR", optimizer.param_groups[0]["lr"], epoch)
 
-    print(f"\nEpoch {epoch+1:03d}")
-    print(f"   Train Loss: {train_loss:.6f}")
-    print(f"   Val Loss:   {val_loss:.6f}")
-
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-
-        ckpt_path = os.path.join(
-            ckpt_dir,
-            f"{config['experiment_name']}_best.pth"
-        )
-
-        torch.save({
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "val_loss": best_val_loss,
-            "config": config
-        }, ckpt_path)
-
-        print(f"   ✅ Saved new best checkpoint: {ckpt_path}")
-
-def evaluate(model, val_loader, criterion, device, temporal=False):
-    model.eval()
-    total_loss = 0.0
-
-    with torch.no_grad():
-        if not temporal:
-            for graphs in val_loader:
-                for graph in graphs:
-                    x = graph["node_features"].float().to(device)
-
-                    edge_index = graph["edges"].long().to(device)
-                    if edge_index.shape[0] != 2:
-                        edge_index = edge_index.t()
-
-                    y = x[:, 0].unsqueeze(1)
-
-                    pred = model(x, edge_index)
-                    loss = criterion(pred, y)
-
-                    total_loss += loss.item()
-
-        else:
-            for sequence, target, metadata in val_loader:
-
-                # Fix batch wrapper
-                sequence = sequence[0]
-                target = target
-
-                if isinstance(target, list):
-                    target = target[0]
-
-                # Move graphs
-                for g in sequence:
-                    g["node_features"] = g["node_features"].float().to(device)
-                    g["edges"] = g["edges"].long().to(device)
-
-                target["node_features"] = target["node_features"].float().to(device)
-                target["edges"] = target["edges"].long().to(device)
-
-                y = target["node_features"][:, 0].unsqueeze(1)
-
-                pred = model(sequence)
-                loss = criterion(pred, y)
-
-                total_loss += loss.item()
-
-    return total_loss / len(val_loader)
-
+def main():
+    args = parse_args()
+    cfg_path = args.cfg
+    train(config_path=cfg_path)
 
 if __name__ == "__main__":
-    train()
+    main()

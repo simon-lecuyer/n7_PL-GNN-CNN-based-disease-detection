@@ -1,16 +1,16 @@
 experiment_name: "gnn_temporal_v1"
 
 data:
-  train_path: "data/processed/processed_20260211_121548/datasets/gnn/train_seq5.json"
-  val_path: "data/processed/processed_20260211_121548/datasets/gnn/val_seq5.json"
+  train_path: "../data/processed/processed_20260218_122429/datasets/gnn/train.json"
+  val_path: "../data/processed/processed_20260218_122429/datasets/gnn/val.json"
 
 model:
-  in_channels: 3      # [infection, normalized_x, normalized_y]
+  in_channels: 4      # [infection, normalized_x, normalized_y, observed]
   hidden_dim: 64
   num_layers: 3
   out_channels: 1
   dropout: 0.2
-  type: "temporal"     # Options: "spatial", "temporal"
+  type: "spatial"     # Options: "spatial", "temporal"
 
 training:
   epochs: 100
@@ -18,3 +18,5 @@ training:
   lr: 0.001
   optimizer: "adam"
   device: "auto"      # Options: "auto", "cuda", "mps", "cpu"
+  mask: 0.3
+  seed: 42
