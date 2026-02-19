@@ -1,0 +1,24 @@
+experiment_name: "gnn_temporal_v1"
+
+data:
+  train_path: "../data/processed/processed_20260218_122429/datasets/gnn/train_seq5.json"
+  val_path: "../data/processed/processed_20260218_122429/datasets/gnn/val_seq5.json"
+  checkpoint_path: "../gnn/checkpoints"
+  log_path: "../gnn/training_logs"
+
+model:
+  in_channels: 3      # 3 for temporal, 4 for spatial (since we add an `observed` feature)
+  hidden_dim: 64
+  num_layers: 3
+  out_channels: 1
+  dropout: 0.2
+  type: "temporal"     # Options: "spatial", "temporal"
+
+training:
+  epochs: 100
+  batch_size: 32
+  lr: 0.001
+  optimizer: "adam"
+  device: "auto"      # Options: "auto", "cuda", "mps", "cpu"
+  mask: 0.3
+  seed: 42
