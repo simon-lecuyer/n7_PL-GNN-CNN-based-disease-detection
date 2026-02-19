@@ -92,6 +92,5 @@ class TemporalDiseaseGNN(nn.Module):
 
         # Predict infection at next timestep
         pred = self.mlp(h_last)
-        pred = torch.sigmoid(pred)
 
         return pred

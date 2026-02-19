@@ -1,16 +1,18 @@
 experiment_name: "gnn_temporal_v1"
 
 data:
-  train_path: "../data/processed/processed_20260218_122429/datasets/gnn/train.json"
-  val_path: "../data/processed/processed_20260218_122429/datasets/gnn/val.json"
+  train_path: "../data/processed/processed_20260218_122429/datasets/gnn/train_seq5.json"
+  val_path: "../data/processed/processed_20260218_122429/datasets/gnn/val_seq5.json"
+  checkpoint_path: "../gnn/checkpoints"
+  log_path: "../gnn/training_logs"
 
 model:
-  in_channels: 4      # [infection, normalized_x, normalized_y, observed]
+  in_channels: 3      # 3 for temporal, 4 for spatial (since we add an `observed` feature)
   hidden_dim: 64
   num_layers: 3
   out_channels: 1
   dropout: 0.2
-  type: "spatial"     # Options: "spatial", "temporal"
+  type: "temporal"     # Options: "spatial", "temporal"
 
 training:
   epochs: 100

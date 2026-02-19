@@ -8,6 +8,7 @@ from torch_geometric.loader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.data import Data
 from tqdm import tqdm
+import csv
 
 # Add project root to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -111,6 +112,7 @@ def train(config_path="configs/gnn_config.yaml"):
             in_channels=model_cfg["in_channels"],
             hidden_dim=model_cfg["hidden_dim"],
             num_layers=model_cfg["num_layers"],
+            out_channels=model_cfg["out_channels"],
             dropout=model_cfg["dropout"]
         ).to(device)
 
@@ -134,8 +136,20 @@ def train(config_path="configs/gnn_config.yaml"):
     
     epochs = config['training']['epochs']
 
-    model.train()
     print("Starting training...")
+
+    train_losses = []
+    val_losses = []
+    best_val_loss = float("inf")
+
+    name = config["experiment_name"]
+
+    checkpoint_path = config["data"]["checkpoint_path"]
+    checkpoint_path = f"{checkpoint_path}/{name}.pt"
+
+    checkpoint_path = config["data"]["log_path"]
+    log_path = f"{log_path}/{name}.csv"
+
     if model_cfg["type"] == "spatial":
         mask_threshold = 0.3
         if 'mask' in config['training'].keys():
@@ -143,7 +157,7 @@ def train(config_path="configs/gnn_config.yaml"):
         for epoch in range(epochs):
 
             # 1. Train
-
+            model.train()
             total_loss = 0.0
 
             train_pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs} [Train]")
@@ -180,8 +194,9 @@ def train(config_path="configs/gnn_config.yaml"):
                 train_pbar.set_postfix(loss=batch_loss)
 
             avg_train_loss = total_loss / len(train_loader)
+            train_losses.append(avg_train_loss)
             
-            # 2. Validation
+            # 2. Eval
 
             model.eval()
             total_val_loss = 0.0
@@ -225,6 +240,7 @@ def train(config_path="configs/gnn_config.yaml"):
                         total_val_loss += batch_loss
                         val_pbar.set_postfix(val_loss=batch_loss)
                     avg_val_loss = total_val_loss / len(val_loader)
+                    val_losses.append(avg_val_loss)
 
             print(
                 f"Epoch {epoch+1:03d} | "
@@ -232,31 +248,109 @@ def train(config_path="configs/gnn_config.yaml"):
                 f"Val Loss = {avg_val_loss:.6f}"
             )
 
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+
+                torch.save({
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "val_loss": best_val_loss
+                }, checkpoint_path)
+
+                print(f"Best model saved: Val Loss = {best_val_loss:.6f}")
+
+            with open(log_path, mode="w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["epoch", "train_loss", "val_loss"])
+
+                for i in range(len(train_losses)):
+                    writer.writerow([i + 1, train_losses[i], val_losses[i]])
+
     else:
+
         for epoch in range(epochs):
-            total_loss = 0.0
-            for sequence, target, metadata in train_loader:
-                sequence = sequence[0]  # remove batch wrapper
-                target = target[0]
-                for g in sequence:
-                    g["node_features"] = g["node_features"].to(device)
-                    g["edges"] = g["edges"].to(device)
 
-                target["node_features"] = target["node_features"].to(device)
-                target["edges"] = target["edges"].to(device)
+            # 1. Train
 
-                # Target infection values
-                y = target["node_features"][:, 0].unsqueeze(1)
-                pred = model(sequence)
-                loss = criterion(pred, y)
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            model.train()
+            train_loss = 0.0
 
-                total_loss += loss.item()
-            train_loss = total_loss / len(train_loader)
-            print(f"[Epoch {epoch+1:03d}] Train Loss = {train_loss:.6f}")
+            train_pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs} [Train]")
 
+            for sequence_batch, target_batch, _ in train_pbar:
+
+                batch_loss = 0.0
+
+                for seq, target in zip(sequence_batch, target_batch):
+                    for graph in seq:
+                        graph["node_features"] = graph["node_features"].float().to(device)
+                        graph["edges"] = graph["edges"].long().to(device)
+
+                    target["node_features"] = target["node_features"].float().to(device)
+
+                    pred = model(seq)
+                    y = target["node_features"][:, 0].unsqueeze(1)
+                    loss = criterion(pred, y)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                    batch_loss += loss.item()
+
+                train_loss += batch_loss
+                train_pbar.set_postfix(loss=batch_loss)
+
+            avg_train_loss = train_loss/len(train_loader)
+            train_losses.append(avg_train_loss)
+
+            # 2. Eval
+                
+            model.eval()
+            val_loss = 0.0
+            val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{epochs} [Val]")
+
+            with torch.no_grad():
+                for sequence_batch, target_batch, _ in val_pbar:
+
+                    batch_loss = 0.0
+                    for seq, target in zip(sequence_batch, target_batch):
+                        for graph in seq:
+                            graph["node_features"] = graph["node_features"].float().to(device)
+                            graph["edges"] = graph["edges"].long().to(device)
+
+                        target["node_features"] = target["node_features"].float().to(device)
+
+                        pred = model(seq)
+                        y = target["node_features"][:, 0].unsqueeze(1)
+                        loss = criterion(pred, y)
+                        batch_loss += loss.item()
+
+                    val_loss += batch_loss
+                    val_pbar.set_postfix(val_loss=batch_loss)
+
+            avg_val_loss = val_loss / len(val_loader)
+            val_losses.append(avg_val_loss)
+
+            print(
+                f"Epoch {epoch+1:03d} | "
+                f"Train Loss = {avg_train_loss:.6f} | "
+                f"Val Loss = {avg_val_loss:.6f}"
+            )
+
+            if avg_val_loss < best_val_loss:
+                best_val_loss = avg_val_loss
+
+                torch.save({
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "val_loss": best_val_loss
+                }, checkpoint_path)
+
+                print(f"Best model saved: Val Loss = {best_val_loss:.6f}")
+
+            
 
 def main():
     args = parse_args()
