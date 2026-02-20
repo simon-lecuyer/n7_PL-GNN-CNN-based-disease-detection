@@ -43,7 +43,8 @@ class CNNDataset(Dataset):
             }
             return x, metadata
         else:
-            y = torch.tensor(sample['infection_level'], dtype=torch.float32)
+            target_npy = np.load(target['file'], allow_pickle=True).item()
+            y = torch.from_numpy(target_npy['data'].astype(np.float32))  # (64, 64)
             return x, y
 
 
