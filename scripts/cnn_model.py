@@ -4,108 +4,102 @@ import torch.nn as nn
 
 class DiseaseCNN(nn.Module):
     """
-    3D CNN pour prédiction temporelle de l'intensité d'infection.
+    3D CNN temporel avec encoder profond, bottleneck et skip connections.
     Input: (B, L, 64, 64)  - L frames temporelles
-    Output: (B, 1, 64, 64) - prédiction au temps t+L+1
+    Output: (B, 1) - prédiction scalaire au temps t+L+1
     """
     
     def __init__(self, in_frames=5, out_channels=1):
-        """
-        Args:
-            in_frames: nombre de frames temporelles en entrée (L)
-            out_channels: nombre de canaux de sortie (1 pour l'intensité)
-        """
         super(DiseaseCNN, self).__init__()
         
-        # ───── ENCODER 3D ─────
-        # Block 1: (B, L, 64, 64) → (B, 32, L, 32, 32)
-        self.enc1_conv = nn.Conv3d(1, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1))
+        # Encoder Block 1: (B, 1, L, 64, 64) → (B, 16, L, 32, 32)
+        self.enc1_conv = nn.Conv3d(1, 16, kernel_size=(3, 3, 3), padding=(1, 1, 1))
         self.enc1_relu = nn.ReLU(inplace=True)
         self.enc1_pool = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.dropout1 = nn.Dropout3d(0.2)
         
-        # Block 2: (B, 32, L, 32, 32) → (B, 64, L, 16, 16)
-        self.enc2_conv = nn.Conv3d(32, 64, kernel_size=(3, 3, 3), padding=(1, 1, 1))
+        # Encoder Block 2: (B, 16, L, 32, 32) → (B, 32, L, 16, 16)
+        self.enc2_conv = nn.Conv3d(16, 32, kernel_size=(3, 3, 3), padding=(1, 1, 1))
         self.enc2_relu = nn.ReLU(inplace=True)
         self.enc2_pool = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.dropout2 = nn.Dropout3d(0.25)
         
-        # Block 3: (B, 64, L, 16, 16) → (B, 128, L, 8, 8)
-        self.enc3_conv = nn.Conv3d(64, 128, kernel_size=(3, 3, 3), padding=(1, 1, 1))
+        # Encoder Block 3: (B, 32, L, 16, 16) → (B, 64, L, 8, 8)
+        self.enc3_conv = nn.Conv3d(32, 64, kernel_size=(3, 3, 3), padding=(1, 1, 1))
         self.enc3_relu = nn.ReLU(inplace=True)
         self.enc3_pool = nn.MaxPool3d(kernel_size=(1, 2, 2), stride=(1, 2, 2))
+        self.dropout3 = nn.Dropout3d(0.3)
         
-        # ───── BOTTLENECK 3D ─────
-        self.bottleneck_conv1 = nn.Conv3d(128, 256, kernel_size=(3, 3, 3), padding=(1, 1, 1))
-        self.bottleneck_relu1 = nn.ReLU(inplace=True)
-        self.bottleneck_conv2 = nn.Conv3d(256, 256, kernel_size=(3, 3, 3), padding=(1, 1, 1))
-        self.bottleneck_relu2 = nn.ReLU(inplace=True)
+        # Bottleneck: (B, 64, L, 8, 8) → (B, 128, L, 8, 8)
+        self.bottleneck_conv = nn.Conv3d(64, 128, kernel_size=(3, 3, 3), padding=(1, 1, 1))
+        self.bottleneck_relu = nn.ReLU(inplace=True)
+        self.dropout_bottleneck = nn.Dropout3d(0.35)
         
-        # ───── TEMPORAL COMPRESSION ─────
-        # Réduire la dimension temporelle: (B, 256, L, 8, 8) → (B, 256, 1, 8, 8)
-        self.temporal_pool = nn.AdaptiveAvgPool3d((1, 8, 8))
+        # Skip connection adaptor: encoder3 (64 channels) + bottleneck (128) → 128
+        # On va concaténer enc3 + bottleneck → 192 channels → réduire à 128
+        self.skip_conv = nn.Conv3d(64 + 128, 128, kernel_size=(1, 1, 1))
+        self.skip_relu = nn.ReLU(inplace=True)
         
-        # ───── DECODER 2D ─────
-        # De là, on passe à des convolutions 2D standard
-        # (B, 256, 1, 8, 8) → squeeze → (B, 256, 8, 8)
+        # Global pooling
+        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.dropout_pool = nn.Dropout(0.3)
         
-        # Block 1: 8 → 16
-        self.dec1_upconv = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-        self.dec1_conv = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.dec1_relu = nn.ReLU(inplace=True)
+        # MLP Head pour prédiction scalaire
+        self.fc1 = nn.Linear(128, 256)
+        self.fc1_relu = nn.ReLU(inplace=True)
+        self.fc_dropout1 = nn.Dropout(0.3)
         
-        # Block 2: 16 → 32
-        self.dec2_upconv = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-        self.dec2_conv = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.dec2_relu = nn.ReLU(inplace=True)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc2_relu = nn.ReLU(inplace=True)
+        self.fc_dropout2 = nn.Dropout(0.2)
         
-        # Block 3: 32 → 64
-        self.dec3_upconv = nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2)
-        self.dec3_conv = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.dec3_relu = nn.ReLU(inplace=True)
-        
-        # Output
-        self.final_conv = nn.Conv2d(32, out_channels, kernel_size=1)
-        self.sigmoid = nn.Sigmoid()
+        self.fc_out = nn.Linear(128, 1)
         
     def forward(self, x):
         """
-        Forward pass
+        Forward pass avec skip connections du bottleneck vers encoder3
         Args:
             x: (B, L, 64, 64) - L frames temporelles
         Returns:
-            out: (B, 1, 64, 64) - prédiction seg
+            out: (B, 1) - prédiction scalaire
         """
-        # Ajouter dimension channel pour Conv3d: (B, L, 64, 64) → (B, 1, L, 64, 64)
+        # Ajouter dimension channel: (B, L, 64, 64) → (B, 1, L, 64, 64)
         x = x.unsqueeze(1)
         
-        #  ENCODER 3D 
+        # ENCODER BLOCKS
+        # Block 1
         e1 = self.enc1_relu(self.enc1_conv(x))
         e1_pool = self.enc1_pool(e1)
+        e1_pool = self.dropout1(e1_pool)
         
+        # Block 2
         e2 = self.enc2_relu(self.enc2_conv(e1_pool))
         e2_pool = self.enc2_pool(e2)
+        e2_pool = self.dropout2(e2_pool)
         
+        # Block 3
         e3 = self.enc3_relu(self.enc3_conv(e2_pool))
         e3_pool = self.enc3_pool(e3)
+        e3_pool = self.dropout3(e3_pool)  # (B, 64, L, 8, 8)
         
-        # BOTTLENECK 
-        b = self.bottleneck_relu2(self.bottleneck_conv2(self.bottleneck_relu1(self.bottleneck_conv1(e3_pool))))
+        # BOTTLENECK
+        b = self.bottleneck_relu(self.bottleneck_conv(e3_pool))
+        b = self.dropout_bottleneck(b)  # (B, 128, L, 8, 8)
         
-        # TEMPORAL COMPRESSION
-        b = self.temporal_pool(b)  # (B, 256, 1, 8, 8)
-        b = b.squeeze(2)  # (B, 256, 8, 8)
+        # SKIP CONNECTION: concatener encoder3 output avec bottleneck
+        skip = torch.cat([e3_pool, b], dim=1)  # (B, 64+128=192, L, 8, 8)
+        skip = self.skip_relu(self.skip_conv(skip))  # (B, 128, L, 8, 8)
         
-        # DECODER 2D 
-        d1 = self.dec1_upconv(b)
-        d1 = self.dec1_relu(self.dec1_conv(d1))
+        # GLOBAL POOLING
+        pooled = self.global_pool(skip)  # (B, 128, 1, 1, 1)
+        pooled = pooled.view(pooled.size(0), -1)  # (B, 128)
+        pooled = self.dropout_pool(pooled)
         
-        d2 = self.dec2_upconv(d1)
-        d2 = self.dec2_relu(self.dec2_conv(d2))
-        
-        d3 = self.dec3_upconv(d2)
-        d3 = self.dec3_relu(self.dec3_conv(d3))
-        
-        # Output
-        out = self.final_conv(d3)
-        out = self.sigmoid(out)
+        # MLP HEAD
+        h = self.fc1_relu(self.fc1(pooled))  # (B, 256)
+        h = self.fc_dropout1(h)
+        h = self.fc2_relu(self.fc2(h))  # (B, 128)
+        h = self.fc_dropout2(h)
+        out = self.fc_out(h)  # (B, 1)
         
         return out

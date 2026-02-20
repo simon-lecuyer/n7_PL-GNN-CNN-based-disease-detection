@@ -18,6 +18,14 @@ class CNNDataset(Dataset):
             data = json.load(f)
         self.samples = data['samples']
         self.return_metadata = return_metadata
+        
+        # Stats de normalisation IMAGE
+        self.img_mean = 0.764
+        self.img_std = 0.332
+        
+        # Stats de normalisation TARGET
+        self.target_mean = 0.055093
+        self.target_std = 0.180978
 
     def __len__(self):
         return len(self.samples)
@@ -29,6 +37,9 @@ class CNNDataset(Dataset):
         npy_path = sample['file']  # Chemin relatif depuis la racine du projet
         npy_data = np.load(npy_path, allow_pickle=True).item()
         x = npy_data['data'].astype(np.float32)  # (64, 64)
+        
+        # Normalisation: (x - mean) / std
+        x = (x - self.img_mean) / (self.img_std + 1e-8)
         
         # Ajouter une dimension de channel: (1, 64, 64)
         x = np.expand_dims(x, axis=0)
@@ -43,15 +54,18 @@ class CNNDataset(Dataset):
             }
             return x, metadata
         else:
-            y = torch.tensor(sample['infection_level'], dtype=torch.float32)
+            # Normaliser le target: (y - mean) / std
+            y_raw = sample['infection_level']
+            y = (y_raw - self.target_mean) / (self.target_std + 1e-8)
+            y = torch.tensor(y, dtype=torch.float32)
             return x, y
 
 
 class TemporalCNNDataset(Dataset):
     """
     Charge les données CNN avec séquences temporelles.
-    Input: séquence de L frames consécutives (B, L, 64, 64)
-    Output: scalaire (infection_level au temps t+1)
+    Input: séquence de L frames consécutives (B, L, 64, 64) - normalisées
+    Output: scalaire (infection_level au temps t+1) - dans [0, 1]
     """
     
     def __init__(self, json_file, sequence_length=5, require_consecutive=True):
@@ -67,6 +81,14 @@ class TemporalCNNDataset(Dataset):
         self.samples = data['samples']
         self.sequence_length = sequence_length
         self.require_consecutive = require_consecutive
+        
+        # Stats de normalisation IMAGE
+        self.img_mean = 0.764
+        self.img_std = 0.332
+        
+        # Stats de normalisation TARGET
+        self.target_mean = 0.055093
+        self.target_std = 0.180978
         
         # Organiser les samples par simulation et timestep
         self.sequences = self._build_sequences()
@@ -118,14 +140,19 @@ class TemporalCNNDataset(Dataset):
             npy_path = sample['file']
             npy_data = np.load(npy_path, allow_pickle=True).item()
             frame = npy_data['data'].astype(np.float32)  # (64, 64)
+            
+            # Normalisation: (x - mean) / std
+            frame = (frame - self.img_mean) / (self.img_std + 1e-8)
             frames.append(frame)
         
         # Stack: (L, 64, 64)
         frames = np.stack(frames, axis=0)
         frames = torch.from_numpy(frames)
         
-        # Target: infection_level du frame suivant (t+1)
-        y = torch.tensor(target['infection_level'], dtype=torch.float32)
+        # Target: normaliser infection_level du frame suivant (t+1)
+        y_raw = target['infection_level']
+        y = (y_raw - self.target_mean) / (self.target_std + 1e-8)
+        y = torch.tensor(y, dtype=torch.float32)
         
         return frames, y
 
