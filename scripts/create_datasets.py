@@ -226,7 +226,7 @@ def create_temporal_sequences(samples, sequence_length, stride):
     return sequences
 
 
-def split_data(samples, train_ratio, val_ratio, test_ratio, stratify_labels, seed, min_samples):
+def split_data(samples, train_ratio, val_ratio, test_ratio, stratify_labels, seed, min_samples, split_on_simulation=False):
     """
     Split les données en train/val/test.
     
@@ -236,46 +236,74 @@ def split_data(samples, train_ratio, val_ratio, test_ratio, stratify_labels, see
     # Vérifier ratios
     assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios doivent sommer à 1.0"
     
-    n_samples = len(samples)
-    
-    # Vérifier minimum
-    if n_samples < min_samples * 3:
-        print(f"⚠️  Nombre d'échantillons insuffisant ({n_samples}), split non-optimal")
-    
-    # Premier split: train vs (val + test)
-    if stratify_labels is not None:
-        train_idx, temp_idx = train_test_split(
-            np.arange(n_samples),
+    if split_on_simulation:
+        sim_ids = sorted(set(s["sim_id"] for s in samples))
+        n_sims = len(sim_ids)
+
+        if n_sims < 3:
+            print(f"⚠️  Nombre de simulations insuffisant ({n_sims}) pour un split fiable")
+
+        train_sims, temp_sims = train_test_split(
+            sim_ids,
             test_size=(val_ratio + test_ratio),
             random_state=seed,
-            stratify=stratify_labels
+            shuffle=True
         )
-        
-        # Second split: val vs test
-        temp_labels = stratify_labels[temp_idx]
-        val_idx, test_idx = train_test_split(
-            temp_idx,
+        val_sims, test_sims = train_test_split(
+            temp_sims,
             test_size=test_ratio / (val_ratio + test_ratio),
             random_state=seed,
-            stratify=temp_labels
+            shuffle=True
         )
+
+        train_sims = set(train_sims)
+        val_sims = set(val_sims)
+        test_sims = set(test_sims)
+
+        train_samples = [s for s in samples if s["sim_id"] in train_sims]
+        val_samples = [s for s in samples if s["sim_id"] in val_sims]
+        test_samples = [s for s in samples if s["sim_id"] in test_sims]
     else:
-        train_idx, temp_idx = train_test_split(
-            np.arange(n_samples),
-            test_size=(val_ratio + test_ratio),
-            random_state=seed
-        )
-        
-        val_idx, test_idx = train_test_split(
-            temp_idx,
-            test_size=test_ratio / (val_ratio + test_ratio),
-            random_state=seed
-        )
-    
-    train_samples = [samples[i] for i in train_idx]
-    val_samples = [samples[i] for i in val_idx]
-    test_samples = [samples[i] for i in test_idx]
-    
+        n_samples = len(samples)
+
+        if n_samples < min_samples * 3:
+            print(f"⚠️  Nombre d'échantillons insuffisant ({n_samples}), split non-optimal")
+
+        if stratify_labels is not None:
+            train_idx, temp_idx = train_test_split(
+                np.arange(n_samples),
+                test_size=(val_ratio + test_ratio),
+                random_state=seed,
+                stratify=stratify_labels
+            )
+
+            temp_labels = stratify_labels[temp_idx]
+            val_idx, test_idx = train_test_split(
+                temp_idx,
+                test_size=test_ratio / (val_ratio + test_ratio),
+                random_state=seed,
+                stratify=temp_labels
+            )
+        else:
+            train_idx, temp_idx = train_test_split(
+                np.arange(n_samples),
+                test_size=(val_ratio + test_ratio),
+                random_state=seed
+            )
+
+            val_idx, test_idx = train_test_split(
+                temp_idx,
+                test_size=test_ratio / (val_ratio + test_ratio),
+                random_state=seed
+            )
+
+        train_samples = [samples[i] for i in train_idx]
+        val_samples = [samples[i] for i in val_idx]
+        test_samples = [samples[i] for i in test_idx]
+
+    if len(train_samples) < min_samples or len(val_samples) < min_samples or len(test_samples) < min_samples:
+        print("⚠️  Un split a trop peu d'échantillons, ajuste les ratios ou le nombre de sims")
+
     return train_samples, val_samples, test_samples
 
 
@@ -423,7 +451,8 @@ def main():
             args.test_ratio,
             stratify_labels,
             args.seed,
-            args.min_samples_per_split
+            args.min_samples_per_split,
+            split_on_simulation=(args.stratify_by == "simulation")
         )
         
         print(f"  Train: {len(train)} échantillons")
