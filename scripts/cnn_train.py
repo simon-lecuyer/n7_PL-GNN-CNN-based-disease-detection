@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 from datetime import datetime
+from xml.parsers.expat import model
 
 import torch
 import torch.nn as nn
@@ -110,9 +111,9 @@ def train():
             x = x.to(device)  # (B, L, 64, 64)
             y = y.to(device).unsqueeze(1)  # (B,) → (B, 1)
 
-            pred = model(x)  # (B, 1, 64, 64)
-            pred_scalar = pred.mean(dim=(2, 3))  # (B, 1) - moyenne spatiale
-            loss = criterion(pred_scalar, y)
+            y = y.to(device).unsqueeze(1)          # (B, 64, 64) → (B, 1, 64, 64)
+            pred = model(x)                         # (B, 1, 64, 64)
+            loss = criterion(pred, y)              # compare full maps directly
 
             optimizer.zero_grad()
             loss.backward()
