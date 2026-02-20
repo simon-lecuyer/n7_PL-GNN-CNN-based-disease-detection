@@ -52,8 +52,7 @@ class TemporalCNNDataset(Dataset):
     """
     Charge les données CNN avec séquences temporelles.
     Input: séquence de L frames consécutives (B, L, 64, 64)
-    Output: scalaire (infection_level au temps t+1)
-    """
+    Output: carte (64, 64) de la frame suivante (t+1)    """
     
     def __init__(self, json_file, sequence_length=5, require_consecutive=True):
         """
@@ -125,9 +124,12 @@ class TemporalCNNDataset(Dataset):
         frames = np.stack(frames, axis=0)
         frames = torch.from_numpy(frames)
         
-        # Target: infection_level du frame suivant (t+1)
-        y = torch.tensor(target['infection_level'], dtype=torch.float32)
-        
+        # Target: frame suivante (t+1) sous forme de carte 64x64
+        target_path = target['file']
+        target_npy = np.load(target_path, allow_pickle=True).item()
+        y = target_npy['data'].astype(np.float32)          # (64, 64)
+        y = np.expand_dims(y, axis=0)                      # (1, 64, 64)  <-- canal
+        y = torch.from_numpy(y)
         return frames, y
 
 

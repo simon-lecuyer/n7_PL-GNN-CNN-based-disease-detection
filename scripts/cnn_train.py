@@ -108,12 +108,11 @@ def train():
         train_loss = 0.0
 
         for x, y in tqdm(train_loader, desc=f"Epoch {epoch}", leave=False):
-            x = x.to(device)  # (B, L, 64, 64)
-            y = y.to(device).unsqueeze(1)  # (B,) → (B, 1)
+            x = x.to(device)        # (B, L, 64, 64)
+            y = y.to(device)        # (B, 1, 64, 64)  <-- déjà OK grâce au dataset
 
-            y = y.to(device).unsqueeze(1)          # (B, 64, 64) → (B, 1, 64, 64)
-            pred = model(x)                         # (B, 1, 64, 64)
-            loss = criterion(pred, y)              # compare full maps directly
+            pred = model(x)         # (B, 1, 64, 64)
+            loss = criterion(pred, y) # compare full maps directly
 
             optimizer.zero_grad()
             loss.backward()
@@ -136,7 +135,7 @@ def train():
             with torch.no_grad():
                 for x, y in val_loader:
                     x = x.to(device)  # (B, L, 64, 64)
-                    y = y.to(device).unsqueeze(1)          # (B, 64, 64) → (B, 1, 64, 64)
+                    y = y.to(device)          # (B, 64, 64) → (B, 1, 64, 64)
                     pred = model(x)                         # (B, 1, 64, 64)
                     val_loss += criterion(pred, y).item()  # compare full maps
 
