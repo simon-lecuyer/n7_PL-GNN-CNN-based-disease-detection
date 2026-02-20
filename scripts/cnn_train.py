@@ -136,11 +136,9 @@ def train():
             with torch.no_grad():
                 for x, y in val_loader:
                     x = x.to(device)  # (B, L, 64, 64)
-                    y = y.to(device).unsqueeze(1)  # (B,) → (B, 1)
-
-                    pred = model(x)  # (B, 1, 64, 64)
-                    pred_scalar = pred.mean(dim=(2, 3))  # (B, 1) - moyenne spatiale
-                    val_loss += criterion(pred_scalar, y).item()
+                    y = y.to(device).unsqueeze(1)          # (B, 64, 64) → (B, 1, 64, 64)
+                    pred = model(x)                         # (B, 1, 64, 64)
+                    val_loss += criterion(pred, y).item()  # compare full maps
 
             val_loss /= len(val_loader)
             history['val_loss'].append(val_loss)
