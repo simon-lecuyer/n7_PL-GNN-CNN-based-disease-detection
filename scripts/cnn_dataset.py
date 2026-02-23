@@ -43,7 +43,10 @@ class CNNDataset(Dataset):
             }
             return x, metadata
         else:
-            target_npy = np.load(target['file'], allow_pickle=True).item()
+            # Prediction a t+1: utiliser le sample suivant si possible.
+            next_idx = min(idx + 1, len(self.samples) - 1)
+            target_sample = self.samples[next_idx]
+            target_npy = np.load(target_sample['file'], allow_pickle=True).item()
             y = torch.from_numpy(target_npy['data'].astype(np.float32))  # (64, 64)
             return x, y
 

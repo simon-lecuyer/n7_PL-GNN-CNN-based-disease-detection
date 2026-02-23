@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
+import matplotlib.pyplot as plt
 
 from cnn_model import DiseaseCNN
 from cnn_dataset import TemporalCNNDataset
@@ -67,7 +68,8 @@ def train():
     # Model - 3D CNN for temporal prediction
     model = DiseaseCNN(in_frames=args.sequence_length, out_channels=1).to(device)
 
-    criterion = nn.MSELoss()
+    criterion_mse = nn.MSELoss()
+    criterion_mae = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # Create checkpoint directory
@@ -97,55 +99,67 @@ def train():
 
     # Training history
     history = {
-        'train_loss': [],
-        'val_loss': []
+        'train_mse': [],
+        'val_mse': [],
+        'train_mae': [],
+        'val_mae': []
     }
 
     # Loop
     for epoch in range(1, args.epochs + 1):
         # Training
         model.train()
-        train_loss = 0.0
+        train_mse = 0.0
+        train_mae = 0.0
 
         for x, y in tqdm(train_loader, desc=f"Epoch {epoch}", leave=False):
             x = x.to(device)        # (B, L, 64, 64)
-            y = y.to(device)        # (B, 1, 64, 64)  <-- déjà OK grâce au dataset
+            y = y.to(device)        # (B, 1, 64, 64)  
 
             pred = model(x)         # (B, 1, 64, 64)
-            loss = criterion(pred, y) # compare full maps directly
+            loss = criterion_mse(pred, y)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.item()
+            train_mse += loss.item()
+            train_mae += criterion_mae(pred, y).item()
 
-        train_loss /= len(train_loader)
-        history['train_loss'].append(train_loss)
+        train_mse /= len(train_loader)
+        train_mae /= len(train_loader)
+        history['train_mse'].append(train_mse)
+        history['train_mae'].append(train_mae)
 
         #  Validation
         model.eval()
-        val_loss = 0.0
+        val_mse = 0.0
+        val_mae = 0.0
 
         if len(val_loader) == 0:
-            val_loss = float("nan")
-            history['val_loss'].append(val_loss)
+            val_mse = float("nan")
+            val_mae = float("nan")
+            history['val_mse'].append(val_mse)
+            history['val_mae'].append(val_mae)
             print("Warning: empty validation set (check require_consecutive or sequence_length).")
         else:
             with torch.no_grad():
                 for x, y in val_loader:
                     x = x.to(device)  # (B, L, 64, 64)
-                    y = y.to(device)          # (B, 64, 64) → (B, 1, 64, 64)
-                    pred = model(x)                         # (B, 1, 64, 64)
-                    val_loss += criterion(pred, y).item()  # compare full maps
+                    y = y.to(device)  # (B, 1, 64, 64)
+                    pred = model(x)   # (B, 1, 64, 64)
+                    val_mse += criterion_mse(pred, y).item()
+                    val_mae += criterion_mae(pred, y).item()
 
-            val_loss /= len(val_loader)
-            history['val_loss'].append(val_loss)
+            val_mse /= len(val_loader)
+            val_mae /= len(val_loader)
+            history['val_mse'].append(val_mse)
+            history['val_mae'].append(val_mae)
 
         print(
             f"Epoch {epoch:02d} | "
-            f"Train MSE: {train_loss:.6f} | "
-            f"Val MSE: {val_loss:.6f}"
+            f"Train MSE: {train_mse:.6f} MAE: {train_mae:.6f} | "
+            f"Val MSE: {val_mse:.6f} MAE: {val_mae:.6f}"
         )
         
         # Save checkpoint
@@ -155,8 +169,10 @@ def train():
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'train_loss': train_loss,
-                'val_loss': val_loss,
+                'train_mse': train_mse,
+                'val_mse': val_mse,
+                'train_mae': train_mae,
+                'val_mae': val_mae,
             }, checkpoint_path)
     
     # Save final model and history
@@ -164,6 +180,32 @@ def train():
     with open(checkpoint_dir / "history.json", 'w') as f:
         json.dump(history, f, indent=2)
 
+    # Plot training curves
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    epochs = range(1, args.epochs + 1)
+    
+    # MSE
+    ax1.plot(epochs, history['train_mse'], 'b-', label='Train')
+    ax1.plot(epochs, history['val_mse'], 'r-', label='Validation')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('MSE')
+    ax1.set_title('Mean Squared Error')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    
+    # MAE
+    ax2.plot(epochs, history['train_mae'], 'b-', label='Train')
+    ax2.plot(epochs, history['val_mae'], 'r-', label='Validation')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('MAE')
+    ax2.set_title('Mean Absolute Error')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(checkpoint_dir / "training_curves.png", dpi=150)
+    print(f"✓ Training curves saved to {checkpoint_dir / 'training_curves.png'}")
+    
     print("✓ Training finished")
 
 
