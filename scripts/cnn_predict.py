@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
 """
-Script pour faire des prédictions avec le modèle CNN entraîné
-et visualiser les matrices d'infection prédites vs réelles.
+Script pour faire une prédiction par simulation à partir des N premières frames.
+Pour chaque simulation dans le test set, prédit la frame N+1 à partir des frames 0 à N-1.
 """
 
 import argparse
@@ -9,30 +10,35 @@ import numpy as np
 import torch
 import torch.nn as nn
 from pathlib import Path
-from torch.utils.data import DataLoader
+from collections import defaultdict
 import matplotlib.pyplot as plt
-from cnn_dataset import TemporalCNNDataset
 from cnn_model import DiseaseCNN
 
 
-def load_model(checkpoint_path, device, sequence_length=5):
+def parse_args():
+    parser = argparse.ArgumentParser("Predict one sample per simulation")
+    parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--test_json", type=str, required=True)
+    parser.add_argument("--sequence_length", type=int, default=10)
+    parser.add_argument("--output_dir", type=str, default="cnn/predictions_per_sim")
+    return parser.parse_args()
+
+
+def load_model(checkpoint_path, device, sequence_length):
     """Charge le modèle depuis un checkpoint"""
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     model = DiseaseCNN(
         in_frames=sequence_length,
         out_channels=1,
-        hidden_channels=8
+        hidden_channels=16
     )
     
-    # Gérer les deux formats de checkpoint
     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-        # Format complet (checkpoint_epochXXX.pt)
         model.load_state_dict(checkpoint['model_state_dict'])
         print(f"✓ Modèle chargé depuis {checkpoint_path}")
-        print(f"  Epoch: {checkpoint['epoch']}, Val MSE: {checkpoint['val_mse']:.6f}, Val MAE: {checkpoint.get('val_mae', 'N/A')}")
+        print(f"  Epoch: {checkpoint['epoch']}, Val MSE: {checkpoint['val_mse']:.6f}")
     else:
-        # Format state_dict simple (best_model.pt)
         model.load_state_dict(checkpoint)
         print(f"✓ Modèle chargé depuis {checkpoint_path}")
     
@@ -42,205 +48,226 @@ def load_model(checkpoint_path, device, sequence_length=5):
     return model
 
 
-def predict_batch(model, dataloader, device, num_samples=5):
+def load_test_data(test_json_path, sequence_length):
     """
-    Fait des prédictions sur un batch et retourne les résultats
+    Charge le test.json et organise par simulation.
+    Pour chaque simulation, prend les frames 0 à sequence_length-1 comme input,
+    et frame sequence_length comme target.
+    """
+    with open(test_json_path, 'r') as f:
+        data = json.load(f)
     
-    Returns:
-        List of dicts avec 'input', 'target', 'prediction' (matrices 64x64)
-    """
+    # Grouper par sim_id
+    by_sim = defaultdict(list)
+    for sample in data['samples']:
+        by_sim[sample['sim_id']].append(sample)
+    
+    # Trier par timestep et construire les séquences
     results = []
-    
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(dataloader):
-            inputs = inputs.to(device)
-            targets = targets.to(device)
-            
-            predictions = model(inputs)
-            
-            # Convertir en numpy et sauvegarder
-            for i in range(inputs.size(0)):
-                if len(results) >= num_samples:
-                    return results
-                
-                # Last frame de l'input (t+4)
-                last_input_frame = inputs[i, -1].cpu().numpy()  # (64, 64)
-                target = targets[i, 0].cpu().numpy()  # (64, 64)
-                pred = predictions[i, 0].cpu().numpy()  # (64, 64)
-                
-                results.append({
-                    'last_input_frame': last_input_frame,
-                    'target': target,
-                    'prediction': pred,
-                    'mse': np.mean((target - pred) ** 2),
-                    'mae': np.mean(np.abs(target - pred))
-                })
+    for sim_id in sorted(by_sim.keys()):
+        samples = sorted(by_sim[sim_id], key=lambda x: x['timestep'])
+        
+        # Vérifier qu'on a assez de frames
+        if len(samples) < sequence_length + 1:
+            print(f"⚠️  Simulation {sim_id}: pas assez de frames ({len(samples)} < {sequence_length + 1})")
+            continue
+        
+        # Prendre les N premières frames comme input
+        input_samples = samples[:sequence_length]
+        target_sample = samples[sequence_length]
+        
+        # Charger les frames
+        input_frames = []
+        for sample in input_samples:
+            npy_path = sample['file']
+            npy_data = np.load(npy_path, allow_pickle=True).item()
+            frame = npy_data['data'].astype(np.float32)  # (64, 64)
+            input_frames.append(frame)
+        
+        # Target
+        target_npy = np.load(target_sample['file'], allow_pickle=True).item()
+        target = target_npy['data'].astype(np.float32)  # (64, 64)
+        
+        results.append({
+            'sim_id': sim_id,
+            'input_frames': np.stack(input_frames, axis=0),  # (L, 64, 64)
+            'target': target,  # (64, 64)
+            'input_timesteps': [s['timestep'] for s in input_samples],
+            'target_timestep': target_sample['timestep']
+        })
     
     return results
 
 
-def visualize_predictions(results, save_path=None):
-    """
-    Visualise les prédictions: dernière frame d'input, target, prédiction, différence
-    """
-    n_samples = len(results)
-    fig, axes = plt.subplots(n_samples, 4, figsize=(16, 4 * n_samples))
+def predict_simulations(model, data, device):
+    """Fait les prédictions pour toutes les simulations"""
+    predictions = []
     
-    if n_samples == 1:
+    with torch.no_grad():
+        for item in data:
+            # Préparer l'input
+            input_frames = torch.from_numpy(item['input_frames']).unsqueeze(0)  # (1, L, 64, 64)
+            input_frames = input_frames.to(device)
+            
+            # Prédiction
+            pred = model(input_frames)  # (1, 1, 64, 64)
+            pred = pred.squeeze().cpu().numpy()  # (64, 64)
+            
+            # Calculer les métriques
+            target = item['target']
+            mse = np.mean((target - pred) ** 2)
+            mae = np.mean(np.abs(target - pred))
+            
+            predictions.append({
+                'sim_id': item['sim_id'],
+                'input_frames': item['input_frames'],
+                'prediction': pred,
+                'target': target,
+                'mse': mse,
+                'mae': mae,
+                'input_timesteps': item['input_timesteps'],
+                'target_timestep': item['target_timestep']
+            })
+    
+    return predictions
+
+
+def visualize_predictions(predictions, sequence_length, output_path):
+    """
+    Visualise les prédictions : une ligne par simulation.
+    Colonnes : input frames (0 à L-1), target (L), prediction (L), error
+    """
+    n_sims = len(predictions)
+    n_cols = sequence_length + 3  # input + target + pred + error
+    
+    fig, axes = plt.subplots(n_sims, n_cols, figsize=(2.5 * n_cols, 3 * n_sims))
+    
+    if n_sims == 1:
         axes = axes.reshape(1, -1)
     
-    for i, result in enumerate(results):
-        last_frame = result['last_input_frame']
-        target = result['target']
-        pred = result['prediction']
-        diff = np.abs(target - pred)
+    for i, pred_data in enumerate(predictions):
+        sim_id = pred_data['sim_id']
+        input_frames = pred_data['input_frames']
+        target = pred_data['target']
+        prediction = pred_data['prediction']
+        error = np.abs(target - prediction)
         
-        # Dernière frame d'input (t+4)
-        im0 = axes[i, 0].imshow(last_frame, cmap='YlOrRd', vmin=0, vmax=1)
-        axes[i, 0].set_title(f'Sample {i+1}: Input (t+4)')
-        axes[i, 0].axis('off')
-        plt.colorbar(im0, ax=axes[i, 0], fraction=0.046)
+        # Afficher toutes les frames d'input
+        for t in range(sequence_length):
+            ax = axes[i, t]
+            im = ax.imshow(input_frames[t], cmap='YlOrRd', vmin=0, vmax=1)
+            ax.set_title(f't={t}', fontsize=9)
+            ax.axis('off')
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
         
-        # Target réel (t+5)
-        im1 = axes[i, 1].imshow(target, cmap='YlOrRd', vmin=0, vmax=1)
-        axes[i, 1].set_title(f'Target (t+5) - Réel')
-        axes[i, 1].axis('off')
-        plt.colorbar(im1, ax=axes[i, 1], fraction=0.046)
+        # Target
+        ax_target = axes[i, sequence_length]
+        im_target = ax_target.imshow(target, cmap='YlOrRd', vmin=0, vmax=1)
+        ax_target.set_title(f'Target\nt={sequence_length}', fontsize=9, fontweight='bold')
+        ax_target.axis('off')
+        plt.colorbar(im_target, ax=ax_target, fraction=0.046, pad=0.04)
         
-        # Prédiction (t+5)
-        im2 = axes[i, 2].imshow(pred, cmap='YlOrRd', vmin=0, vmax=1)
-        axes[i, 2].set_title(f'Prédiction (t+5)\nMSE={result["mse"]:.4f}, MAE={result["mae"]:.4f}')
-        axes[i, 2].axis('off')
-        plt.colorbar(im2, ax=axes[i, 2], fraction=0.046)
+        # Prédiction
+        ax_pred = axes[i, sequence_length + 1]
+        im_pred = ax_pred.imshow(prediction, cmap='YlOrRd', vmin=0, vmax=1)
+        ax_pred.set_title(f'Prediction\nt={sequence_length}', fontsize=9, fontweight='bold', color='blue')
+        ax_pred.axis('off')
+        plt.colorbar(im_pred, ax=ax_pred, fraction=0.046, pad=0.04)
         
-        # Différence absolue
-        im3 = axes[i, 3].imshow(diff, cmap='Reds', vmin=0, vmax=0.3)
-        axes[i, 3].set_title(f'Erreur absolue')
-        axes[i, 3].axis('off')
-        plt.colorbar(im3, ax=axes[i, 3], fraction=0.046)
+        # Erreur
+        ax_error = axes[i, sequence_length + 2]
+        im_error = ax_error.imshow(error, cmap='Reds', vmin=0, vmax=0.5)
+        ax_error.set_title(f'Error\nMAE={pred_data["mae"]:.4f}', fontsize=9, fontweight='bold', color='red')
+        ax_error.axis('off')
+        plt.colorbar(im_error, ax=ax_error, fraction=0.046, pad=0.04)
+        
+        # Label de la ligne
+        axes[i, 0].text(-0.3, 0.5, f'Sim {sim_id}', 
+                       transform=axes[i, 0].transAxes,
+                       fontsize=12, fontweight='bold',
+                       verticalalignment='center',
+                       rotation=90)
     
+    plt.suptitle(f'CNN Predictions per Simulation (first {sequence_length} frames → frame {sequence_length})', 
+                 fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
-    if save_path:
-        plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"✓ Visualisation sauvegardée: {save_path}")
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"✓ Visualisation sauvegardée: {output_path}")
     
     plt.show()
-    return fig
-
-
-def save_predictions(results, save_dir):
-    """Sauvegarde les matrices prédites en fichiers .npy"""
-    save_dir = Path(save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
-    
-    for i, result in enumerate(results):
-        # Sauvegarder chaque matrice
-        np.save(save_dir / f"sample_{i}_target.npy", result['target'])
-        np.save(save_dir / f"sample_{i}_prediction.npy", result['prediction'])
-        np.save(save_dir / f"sample_{i}_last_input.npy", result['last_input_frame'])
-        
-        # Sauvegarder les métriques
-        with open(save_dir / f"sample_{i}_metrics.json", 'w') as f:
-            json.dump({
-                'mse': float(result['mse']),
-                'mae': float(result['mae'])
-            }, f, indent=2)
-    
-    print(f"✓ {len(results)} matrices sauvegardées dans {save_dir}")
-
-
-def print_matrix_stats(result, sample_idx):
-    """Affiche les statistiques d'une matrice prédite"""
-    target = result['target']
-    pred = result['prediction']
-    
-    print(f"\n{'='*60}")
-    print(f"SAMPLE {sample_idx + 1}")
-    print(f"{'='*60}")
-    print(f"\nTarget (Réel):")
-    print(f"  Min: {target.min():.4f}, Max: {target.max():.4f}, Mean: {target.mean():.4f}")
-    print(f"\nPrédiction:")
-    print(f"  Min: {pred.min():.4f}, Max: {pred.max():.4f}, Mean: {pred.mean():.4f}")
-    print(f"\nMétriques:")
-    print(f"  MSE:  {result['mse']:.6f}")
-    print(f"  MAE:  {result['mae']:.6f}")
-    print(f"  RMSE: {np.sqrt(result['mse']):.6f}")
-    
-    # Quelques valeurs de la matrice
-    print(f"\nAperçu de la matrice de prédiction (5 premières lignes, 5 premières colonnes):")
-    print(pred[:5, :5])
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint', type=str, required=True,
-                        help='Chemin vers le checkpoint du modèle')
-    parser.add_argument('--processed_dir', type=str, required=True,
-                        help='Répertoire des données prétraitées')
-    parser.add_argument('--sequence_length', type=int, default=5,
-                        help='Longueur de la séquence temporelle')
-    parser.add_argument('--num_samples', type=int, default=5,
-                        help='Nombre de samples à prédire et visualiser')
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--split', type=str, default='test', choices=['train', 'val', 'test'],
-                        help='Split à utiliser pour les prédictions')
-    parser.add_argument('--save_dir', type=str, default=None,
-                        help='Répertoire pour sauvegarder les prédictions')
+    args = parse_args()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    args = parser.parse_args()
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Device: {device}")
+    print(f"Device: {device}\n")
     
     # Charger le modèle
-    model = load_model(args.checkpoint, device, sequence_length=args.sequence_length)
+    model = load_model(args.checkpoint, device, args.sequence_length)
     
-    # Charger le dataset
-    processed_dir = Path(args.processed_dir)
-    dataset_dir = processed_dir / "datasets" / "cnn"
-    json_file = dataset_dir / f"{args.split}.json"
+    # Charger les données
+    print(f"\n📂 Chargement du test set: {args.test_json}")
+    data = load_test_data(args.test_json, args.sequence_length)
+    print(f"✓ {len(data)} simulations trouvées")
     
-    print(f"\n✓ Chargement du dataset: {json_file}")
-    dataset = TemporalCNNDataset(
-        json_file=json_file,
-        sequence_length=args.sequence_length,
-        require_consecutive=True
-    )
-    print(f"  {len(dataset)} séquences chargées")
+    # Afficher les infos
+    for item in data:
+        print(f"  - Sim {item['sim_id']}: frames {item['input_timesteps'][0]}-{item['input_timesteps'][-1]} → {item['target_timestep']}")
     
-    dataloader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=0
-    )
+    # Prédictions
+    print(f"\n🔮 Génération des prédictions...")
+    predictions = predict_simulations(model, data, device)
     
-    # Faire les prédictions
-    print(f"\n🔮 Génération de {args.num_samples} prédictions...")
-    results = predict_batch(model, dataloader, device, num_samples=args.num_samples)
+    # Afficher les résultats
+    print(f"\n{'='*70}")
+    print("RÉSULTATS PAR SIMULATION")
+    print(f"{'='*70}")
+    for pred in predictions:
+        print(f"\nSimulation {pred['sim_id']}:")
+        print(f"  MSE:  {pred['mse']:.6f}")
+        print(f"  MAE:  {pred['mae']:.6f}")
+        print(f"  RMSE: {np.sqrt(pred['mse']):.6f}")
     
-    # Afficher les statistiques
-    for i, result in enumerate(results):
-        print_matrix_stats(result, i)
+    # MSE/MAE moyens
+    avg_mse = np.mean([p['mse'] for p in predictions])
+    avg_mae = np.mean([p['mae'] for p in predictions])
+    print(f"\n{'='*70}")
+    print(f"MOYENNE SUR {len(predictions)} SIMULATIONS:")
+    print(f"  MSE moyen:  {avg_mse:.6f}")
+    print(f"  MAE moyen:  {avg_mae:.6f}")
+    print(f"  RMSE moyen: {np.sqrt(avg_mse):.6f}")
+    print(f"{'='*70}\n")
     
-    # Sauvegarder les matrices
-    if args.save_dir:
-        save_predictions(results, args.save_dir)
-    else:
-        # Sauvegarder dans le répertoire du checkpoint
-        checkpoint_dir = Path(args.checkpoint).parent
-        save_dir = checkpoint_dir / "predictions"
-        save_predictions(results, save_dir)
+    # Visualisation
+    output_dir = Path(args.output_dir)
+    output_path = output_dir / "predictions_per_simulation.png"
+    visualize_predictions(predictions, args.sequence_length, output_path)
     
-    # Visualiser
-    print(f"\n📊 Génération de la visualisation...")
-    if args.save_dir:
-        viz_path = Path(args.save_dir) / "predictions_visualization.png"
-    else:
-        viz_path = Path(args.checkpoint).parent / "predictions_visualization.png"
-    
-    visualize_predictions(results, save_path=viz_path)
+    # Sauvegarder les résultats
+    results_file = output_dir / "results_per_simulation.json"
+    results = {
+        'predictions': [
+            {
+                'sim_id': int(p['sim_id']),
+                'mse': float(p['mse']),
+                'mae': float(p['mae']),
+                'rmse': float(np.sqrt(p['mse']))
+            }
+            for p in predictions
+        ],
+        'average': {
+            'mse': float(avg_mse),
+            'mae': float(avg_mae),
+            'rmse': float(np.sqrt(avg_mse))
+        }
+    }
+    with open(results_file, 'w') as f:
+        json.dump(results, f, indent=2)
+    print(f"✓ Résultats JSON sauvegardés: {results_file}\n")
 
 
 if __name__ == "__main__":

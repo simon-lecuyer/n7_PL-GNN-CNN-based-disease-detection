@@ -4,11 +4,11 @@ import argparse
 import json
 from pathlib import Path
 from datetime import datetime
-from xml.parsers.expat import model
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
@@ -22,11 +22,13 @@ def parse_args():
     parser = argparse.ArgumentParser("Train temporal CNN on infection level prediction")
     parser.add_argument("--processed_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--weight_decay", type=float, default=1e-5, help="L2 regularization")
     parser.add_argument("--variant", type=str, default="base", help="Model variant (base, etc.)")
-    parser.add_argument("--save_every", type=int, default=1, help="Save checkpoint every N epochs")
+    parser.add_argument("--save_every", type=int, default=5, help="Save checkpoint every N epochs")
     parser.add_argument("--sequence_length", type=int, default=5, help="Number of frames in temporal sequence (L)")
+    parser.add_argument("--patience", type=int, default=7, help="Early stopping patience")
     parser.add_argument(
         "--require_consecutive",
         action="store_true",
@@ -70,7 +72,10 @@ def train():
 
     criterion_mse = nn.MSELoss()
     criterion_mae = nn.L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    
+    # Learning rate scheduler
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
 
     # Create checkpoint directory
     checkpoint_dir = Path("cnn/checkpoints") / f"cnn_{args.variant}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -104,6 +109,9 @@ def train():
         'train_mae': [],
         'val_mae': []
     }
+    
+    best_val_mse = float('inf')
+    patience_counter = 0
 
     # Loop
     for epoch in range(1, args.epochs + 1):
@@ -162,6 +170,27 @@ def train():
             f"Val MSE: {val_mse:.6f} MAE: {val_mae:.6f}"
         )
         
+        # Learning rate scheduler
+        scheduler.step(val_mse)
+        
+        # Save best model
+        if val_mse < best_val_mse:
+            best_val_mse = val_mse
+            patience_counter = 0
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_mse': val_mse,
+                'val_mae': val_mae,
+            }, checkpoint_dir / "best_model.pt")
+            print(f"  ✓ Best model saved (val_mse: {val_mse:.6f})")
+        else:
+            patience_counter += 1
+            if patience_counter >= args.patience:
+                print(f"\n🛑 Early stopping at epoch {epoch} (no improvement for {args.patience} epochs)")
+                break
+        
         # Save checkpoint
         if epoch % args.save_every == 0:
             checkpoint_path = checkpoint_dir / f"checkpoint_epoch{epoch:03d}.pt"
@@ -175,8 +204,7 @@ def train():
                 'val_mae': val_mae,
             }, checkpoint_path)
     
-    # Save final model and history
-    torch.save(model.state_dict(), checkpoint_dir / "best_model.pt")
+    # Save final history
     with open(checkpoint_dir / "history.json", 'w') as f:
         json.dump(history, f, indent=2)
 
