@@ -208,30 +208,103 @@ def train():
     with open(checkpoint_dir / "history.json", 'w') as f:
         json.dump(history, f, indent=2)
 
-    # Plot training curves
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    epochs = range(1, args.epochs + 1)
+    # Plot training curves - Enhanced version
+    fig = plt.figure(figsize=(14, 10))
+    gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3)
     
-    # MSE
-    ax1.plot(epochs, history['train_mse'], 'b-', label='Train')
-    ax1.plot(epochs, history['val_mse'], 'r-', label='Validation')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('MSE')
-    ax1.set_title('Mean Squared Error')
-    ax1.legend()
+    epochs = np.arange(1, args.epochs + 1)
+    
+    # Helper function for smoothing
+    def smooth_curve(values, window=3):
+        if len(values) < window:
+            return values
+        smoothed = []
+        for i in range(len(values)):
+            start = max(0, i - window // 2)
+            end = min(len(values), i + window // 2 + 1)
+            smoothed.append(np.mean(values[start:end]))
+        return np.array(smoothed)
+    
+    # 1. MSE - Original
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(epochs, history['train_mse'], 'b-', label='Train', linewidth=2, alpha=0.7)
+    ax1.plot(epochs, history['val_mse'], 'r-', label='Validation', linewidth=2, alpha=0.7)
+    ax1.fill_between(epochs, history['train_mse'], alpha=0.2, color='blue')
+    ax1.fill_between(epochs, history['val_mse'], alpha=0.2, color='red')
+    ax1.set_xlabel('Epoch', fontsize=10)
+    ax1.set_ylabel('MSE', fontsize=10)
+    ax1.set_title('MSE - Original', fontsize=11, fontweight='bold')
+    ax1.legend(fontsize=9)
     ax1.grid(True, alpha=0.3)
     
-    # MAE
-    ax2.plot(epochs, history['train_mae'], 'b-', label='Train')
-    ax2.plot(epochs, history['val_mae'], 'r-', label='Validation')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('MAE')
-    ax2.set_title('Mean Absolute Error')
-    ax2.legend()
+    # 2. MSE - Smoothed
+    ax2 = fig.add_subplot(gs[0, 1])
+    train_mse_smooth = smooth_curve(history['train_mse'], window=3)
+    val_mse_smooth = smooth_curve(history['val_mse'], window=3)
+    ax2.plot(epochs, train_mse_smooth, 'b-', label='Train (smoothed)', linewidth=2.5)
+    ax2.plot(epochs, val_mse_smooth, 'r-', label='Val (smoothed)', linewidth=2.5)
+    ax2.fill_between(epochs, train_mse_smooth, alpha=0.2, color='blue')
+    ax2.fill_between(epochs, val_mse_smooth, alpha=0.2, color='red')
+    ax2.set_xlabel('Epoch', fontsize=10)
+    ax2.set_ylabel('MSE', fontsize=10)
+    ax2.set_title('MSE - Smoothed (Moving Avg)', fontsize=11, fontweight='bold')
+    ax2.legend(fontsize=9)
     ax2.grid(True, alpha=0.3)
     
-    plt.tight_layout()
-    plt.savefig(checkpoint_dir / "training_curves.png", dpi=150)
+    # 3. MAE - Original
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.plot(epochs, history['train_mae'], 'g-', label='Train', linewidth=2, alpha=0.7)
+    ax3.plot(epochs, history['val_mae'], 'orange', label='Validation', linewidth=2, alpha=0.7)
+    ax3.fill_between(epochs, history['train_mae'], alpha=0.2, color='green')
+    ax3.fill_between(epochs, history['val_mae'], alpha=0.2, color='orange')
+    ax3.set_xlabel('Epoch', fontsize=10)
+    ax3.set_ylabel('MAE', fontsize=10)
+    ax3.set_title('MAE - Original', fontsize=11, fontweight='bold')
+    ax3.legend(fontsize=9)
+    ax3.grid(True, alpha=0.3)
+    
+    # 4. MAE - Smoothed
+    ax4 = fig.add_subplot(gs[1, 1])
+    train_mae_smooth = smooth_curve(history['train_mae'], window=3)
+    val_mae_smooth = smooth_curve(history['val_mae'], window=3)
+    ax4.plot(epochs, train_mae_smooth, 'g-', label='Train (smoothed)', linewidth=2.5)
+    ax4.plot(epochs, val_mae_smooth, 'orange', label='Val (smoothed)', linewidth=2.5)
+    ax4.fill_between(epochs, train_mae_smooth, alpha=0.2, color='green')
+    ax4.fill_between(epochs, val_mae_smooth, alpha=0.2, color='orange')
+    ax4.set_xlabel('Epoch', fontsize=10)
+    ax4.set_ylabel('MAE', fontsize=10)
+    ax4.set_title('MAE - Smoothed (Moving Avg)', fontsize=11, fontweight='bold')
+    ax4.legend(fontsize=9)
+    ax4.grid(True, alpha=0.3)
+    
+    # 5. Combined view - both metrics
+    ax5 = fig.add_subplot(gs[2, :])
+    ax5_twin = ax5.twinx()
+    
+    mse_line1 = ax5.plot(epochs, history['train_mse'], 'b-', label='Train MSE', linewidth=2.5, marker='o', markersize=3, alpha=0.8)
+    mse_line2 = ax5.plot(epochs, history['val_mse'], 'r-', label='Val MSE', linewidth=2.5, marker='s', markersize=3, alpha=0.8)
+    
+    mae_line1 = ax5_twin.plot(epochs, history['train_mae'], 'g--', label='Train MAE', linewidth=2.5, marker='^', markersize=3, alpha=0.8)
+    mae_line2 = ax5_twin.plot(epochs, history['val_mae'], color='orange', linestyle='--', label='Val MAE', linewidth=2.5, marker='v', markersize=3, alpha=0.8)
+    
+    ax5.set_xlabel('Epoch', fontsize=11, fontweight='bold')
+    ax5.set_ylabel('MSE', fontsize=11, fontweight='bold', color='blue')
+    ax5_twin.set_ylabel('MAE', fontsize=11, fontweight='bold', color='green')
+    ax5.tick_params(axis='y', labelcolor='blue')
+    ax5_twin.tick_params(axis='y', labelcolor='green')
+    ax5.set_title('Training vs Validation - All Metrics', fontsize=12, fontweight='bold')
+    ax5.grid(True, alpha=0.3)
+    
+    # Combine legends
+    lines = mse_line1 + mse_line2 + mae_line1 + mae_line2
+    labels = [l.get_label() for l in lines]
+    ax5.legend(lines, labels, loc='upper right', fontsize=10)
+    
+    # Main title
+    fig.suptitle(f'CNN Training Summary - {args.variant.upper()} Model\nFinal Validation MSE: {history["val_mse"][-1]:.6f}', 
+                 fontsize=13, fontweight='bold', y=0.995)
+    
+    plt.savefig(checkpoint_dir / "training_curves.png", dpi=150, bbox_inches='tight')
     print(f"✓ Training curves saved to {checkpoint_dir / 'training_curves.png'}")
     
     print("✓ Training finished")

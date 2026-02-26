@@ -200,6 +200,63 @@ def visualize_predictions(predictions, sequence_length, output_path):
     plt.show()
 
 
+def visualize_single_simulation(prediction_data, sequence_length, output_path):
+    """
+    Visualise les prédictions pour une seule simulation de manière détaillée.
+    Affiche : les frames d'input en carrousel, puis target, prédiction et erreur côte à côte.
+    """
+    sim_id = prediction_data['sim_id']
+    input_frames = prediction_data['input_frames']
+    target = prediction_data['target']
+    prediction = prediction_data['prediction']
+    error = np.abs(target - prediction)
+    mse = prediction_data['mse']
+    mae = prediction_data['mae']
+    
+    fig = plt.figure(figsize=(16, 6))
+    gs = fig.add_gridspec(2, sequence_length + 3, hspace=0.3, wspace=0.3)
+    
+    # Première ligne : les frames d'input
+    for t in range(sequence_length):
+        ax = fig.add_subplot(gs[0, t])
+        im = ax.imshow(input_frames[t], cmap='YlOrRd', vmin=0, vmax=1)
+        ax.set_title(f'Input Frame t={t}', fontsize=10, fontweight='bold')
+        ax.axis('off')
+        plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    
+    # Deuxième ligne : target, prédiction, erreur
+    # Target
+    ax_target = fig.add_subplot(gs[1, :sequence_length//2])
+    im_target = ax_target.imshow(target, cmap='YlOrRd', vmin=0, vmax=1)
+    ax_target.set_title(f'Target Frame (t={sequence_length})', fontsize=12, fontweight='bold')
+    ax_target.axis('off')
+    cbar_target = plt.colorbar(im_target, ax=ax_target, fraction=0.046, pad=0.04)
+    
+    # Prédiction
+    ax_pred = fig.add_subplot(gs[1, sequence_length//2:sequence_length])
+    im_pred = ax_pred.imshow(prediction, cmap='YlOrRd', vmin=0, vmax=1)
+    ax_pred.set_title(f'Predicted Frame (t={sequence_length})', fontsize=12, fontweight='bold', color='blue')
+    ax_pred.axis('off')
+    cbar_pred = plt.colorbar(im_pred, ax=ax_pred, fraction=0.046, pad=0.04)
+    
+    # Erreur
+    ax_error = fig.add_subplot(gs[1, sequence_length:])
+    im_error = ax_error.imshow(error, cmap='Reds', vmin=0, vmax=0.5)
+    ax_error.set_title(f'Absolute Error\nMAE={mae:.4f} | MSE={mse:.4f}', 
+                      fontsize=12, fontweight='bold', color='red')
+    ax_error.axis('off')
+    cbar_error = plt.colorbar(im_error, ax=ax_error, fraction=0.046, pad=0.04)
+    
+    fig.suptitle(f'CNN Prediction Details - Simulation {sim_id}\n(Using first {sequence_length} frames to predict frame {sequence_length})', 
+                fontsize=14, fontweight='bold')
+    
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"✓ Visualisation détaillée pour Sim {sim_id}: {output_path}")
+    plt.close()
+
+
 def main():
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -242,10 +299,16 @@ def main():
     print(f"  RMSE moyen: {np.sqrt(avg_mse):.6f}")
     print(f"{'='*70}\n")
     
-    # Visualisation
+    # Visualisation générale (toutes les simulations)
     output_dir = Path(args.output_dir)
     output_path = output_dir / "predictions_per_simulation.png"
     visualize_predictions(predictions, args.sequence_length, output_path)
+    
+    # Visualisation détaillée pour la première simulation
+    if len(predictions) > 0:
+        first_pred = predictions[0]
+        single_sim_path = output_dir / f"prediction_detail_sim_{first_pred['sim_id']}.png"
+        visualize_single_simulation(first_pred, args.sequence_length, single_sim_path)
     
     # Sauvegarder les résultats
     results_file = output_dir / "results_per_simulation.json"
