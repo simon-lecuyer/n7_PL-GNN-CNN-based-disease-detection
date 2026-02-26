@@ -122,6 +122,38 @@ def load_preprocessing_metadata(input_dir):
         return json.load(f)
 
 
+def collect_samples_unified(input_dir):
+    """
+    Collecte les paires (sim_id, timestep) disponibles (format-agnostic).
+    
+    Returns:
+        List de tuples (sim_id, timestep, infection_level)
+    """
+    # Utiliser CNN comme référence pour identifier les paires disponibles
+    cnn_dir = Path(input_dir) / "cnn"
+    
+    if not cnn_dir.exists():
+        return []
+    
+    pairs = []
+    
+    # Parcourir toutes les simulations
+    for sim_dir in sorted(cnn_dir.glob("sim_*")):
+        sim_id = int(sim_dir.name.split("_")[1])
+        
+        # Parcourir tous les timesteps
+        for sample_file in sorted(sim_dir.glob("t_*.npy")):
+            timestep = int(sample_file.stem.split("_")[1])
+            
+            # Charger pour obtenir infection level (après inversion)
+            data = np.load(sample_file, allow_pickle=True).item()
+            infection_level = float(data["data"].mean())
+            
+            pairs.append((sim_id, timestep, infection_level))
+    
+    return pairs
+
+
 def collect_samples(input_dir, format_type):
     """
     Collecte tous les échantillons pour un format donné.
@@ -144,7 +176,7 @@ def collect_samples(input_dir, format_type):
         for sample_file in sorted(sim_dir.glob("t_*.npy")):
             timestep = int(sample_file.stem.split("_")[1])
             
-            # Charger pour obtenir infection level
+            # Charger pour obtenir infection level (après inversion sémantique)
             data = np.load(sample_file, allow_pickle=True).item()
             
             if format_type == "cnn":
@@ -383,48 +415,87 @@ def main():
         "formats": {}
     }
     
-    # Traiter chaque format
+    # Faire le split UNE SEULE FOIS sur les paires (sim_id, timestep)
+    print("\nCollecte des paires (sim_id, timestep) unifiées...")
+    pairs = collect_samples_unified(input_dir)
+    
+    if not pairs:
+        print("Erreur: Aucune paire trouvée!")
+        return
+    
+    print(f"  {len(pairs)} paires identifiées")
+    
+    # Créer les indices pour le split
+    all_indices = np.arange(len(pairs))
+    pairs_array = np.array(pairs, dtype=object)
+    
+    # Stratification
+    if args.stratify_by == "simulation":
+        stratify_labels = pairs_array[:, 0].astype(int)  # sim_id
+    elif args.stratify_by == "infection_level":
+        levels = pairs_array[:, 2].astype(float)
+        bins = [0, 0.1, 0.3, 0.5, 0.7, 1.0]
+        stratify_labels = np.digitize(levels, bins)
+    else:
+        stratify_labels = None
+    
+    # Split une seule fois
+    print("Split unifié des données...")
+    if stratify_labels is not None:
+        train_idx, temp_idx = train_test_split(
+            all_indices,
+            test_size=(args.val_ratio + args.test_ratio),
+            random_state=args.seed,
+            stratify=stratify_labels
+        )
+        temp_labels = stratify_labels[temp_idx]
+        val_idx, test_idx = train_test_split(
+            temp_idx,
+            test_size=args.test_ratio / (args.val_ratio + args.test_ratio),
+            random_state=args.seed,
+            stratify=temp_labels
+        )
+    else:
+        train_idx, temp_idx = train_test_split(
+            all_indices,
+            test_size=(args.val_ratio + args.test_ratio),
+            random_state=args.seed
+        )
+        val_idx, test_idx = train_test_split(
+            temp_idx,
+            test_size=args.test_ratio / (args.val_ratio + args.test_ratio),
+            random_state=args.seed
+        )
+    
+    train_pairs = [pairs[i] for i in train_idx]
+    val_pairs = [pairs[i] for i in val_idx]
+    test_pairs = [pairs[i] for i in test_idx]
+    
+    print(f"  Train: {len(train_pairs)} paires")
+    print(f"  Val: {len(val_pairs)} paires")
+    print(f"  Test: {len(test_pairs)} paires")
+    
+    # Traiter chaque format en appliquant le même split
     for fmt in formats:
         print(f"\n{'='*50}")
         print(f"  Format: {fmt.upper()}")
         print(f"{'='*50}")
         
-        # Collecter échantillons
+        # Collecter tous les échantillons
         print("Collecte des échantillons...")
-        samples = collect_samples(input_dir, fmt)
+        all_samples = collect_samples(input_dir, fmt)
         
-        if not samples:
+        if not all_samples:
             print(f"Attention: Aucun échantillon trouvé pour {fmt}")
             continue
         
-        print(f"  {len(samples)} échantillons collectés")
+        # Créer un mapping (sim_id, timestep) -> sample
+        sample_map = {(s["sim_id"], s["timestep"]): s for s in all_samples}
         
-        # Séquences temporelles
-        if args.create_sequences:
-            print("Creation des sequences temporelles...")
-            sequences = create_temporal_sequences(
-                samples, args.sequence_length, args.sequence_stride
-            )
-            print(f"  {len(sequences)} sequences creees")
-            
-            # Utiliser séquences pour le split
-            split_samples = sequences
-            stratify_labels = np.array([s["sim_id"] for s in sequences]) if args.stratify_by == "simulation" else None
-        else:
-            split_samples = samples
-            stratify_labels = stratify_samples(samples, args.stratify_by)
-        
-        # Split
-        print("Split des donnees...")
-        train, val, test = split_data(
-            split_samples,
-            args.train_ratio,
-            args.val_ratio,
-            args.test_ratio,
-            stratify_labels,
-            args.seed,
-            args.min_samples_per_split
-        )
+        # Appliquer le split unifié
+        train = [sample_map[(sim_id, timestep)] for sim_id, timestep, _ in train_pairs if (sim_id, timestep) in sample_map]
+        val = [sample_map[(sim_id, timestep)] for sim_id, timestep, _ in val_pairs if (sim_id, timestep) in sample_map]
+        test = [sample_map[(sim_id, timestep)] for sim_id, timestep, _ in test_pairs if (sim_id, timestep) in sample_map]
         
         print(f"  Train: {len(train)} échantillons")
         print(f"  Val: {len(val)} échantillons")
