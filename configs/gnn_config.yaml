@@ -3,6 +3,7 @@ experiment_name: "gnn_spatial_v1"
 data:
   train_path: "../data/processed/processed_20260218_122429/datasets/gnn/train.json"
   val_path: "../data/processed/processed_20260218_122429/datasets/gnn/val.json"
+  test_path: "../data/processed/processed_20260218_122429/datasets/gnn/test.json"
   checkpoint_path: "../gnn/checkpoints"
   log_path: "../gnn/training_logs"
 
