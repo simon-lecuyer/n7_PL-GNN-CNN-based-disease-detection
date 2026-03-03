@@ -131,14 +131,21 @@ def collect_samples_unified(input_dir):
     """
     # Utiliser CNN comme référence pour identifier les paires disponibles
     cnn_dir = Path(input_dir) / "cnn"
-    
+    grid_data_field_name = "data"
+    ref_dir = cnn_dir
+
     if not cnn_dir.exists():
-        return []
+        gnn_dir = Path(input_dir) / "gnn"
+        if gnn_dir.exists():
+            ref_dir = gnn_dir
+            grid_data_field_name = "node_features"
+        else:
+            return []
     
     pairs = []
     
     # Parcourir toutes les simulations
-    for sim_dir in sorted(cnn_dir.glob("sim_*")):
+    for sim_dir in sorted(ref_dir.glob("sim_*")):
         sim_id = int(sim_dir.name.split("_")[1])
         
         # Parcourir tous les timesteps
@@ -147,7 +154,8 @@ def collect_samples_unified(input_dir):
             
             # Charger pour obtenir infection level (après inversion)
             data = np.load(sample_file, allow_pickle=True).item()
-            infection_level = float(data["data"].mean())
+            print(data)
+            infection_level = float(data[grid_data_field_name].mean())
             
             pairs.append((sim_id, timestep, infection_level))
     
