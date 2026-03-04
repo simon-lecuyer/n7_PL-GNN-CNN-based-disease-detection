@@ -22,6 +22,7 @@ from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import os
 
 # Ajouter le chemin vers WaterberryFarms
 WATERBERRYFARMS_PATH = Path(__file__).resolve().parent.parent.parent / "WaterberryFarms"
@@ -141,11 +142,30 @@ def parse_args():
         default=None,
         help="Seed aléatoire pour la reproductibilité (défaut: None)"
     )
+
+    parser.add_argument(
+        "--imumask",
+        type=str,
+        default=None, 
+        help="Path to the imunity mask for the map"
+    )
     
     return parser.parse_args()
 
 
-def create_environment(model_type, width, height, seed, args):
+def load_immunity_map(path):
+    """Cherche dans `path` une masque de type `np.ndarray`"""
+    if path==None or not os.path.exists(path):
+        return None
+    try:
+        mask = np.load(path)
+        print("Successfully loaded mask")
+        return mask
+    except (ValueError, IOError) as e:
+        print(f"Error reading the numpy array from {path}: {e}")
+        return None
+
+def create_environment(model_type, width, height, seed, args, immunity_mask=None):
     """Crée l'environnement de simulation selon les paramètres."""
     if model_type == "epidemic":
         return EpidemicSpreadEnvironment(
@@ -156,7 +176,8 @@ def create_environment(model_type, width, height, seed, args):
             p_transmission=args.p_transmission,
             infection_duration=args.infection_duration,
             spread_dimension=args.spread_dimension,
-            infection_seeds=args.infection_seeds
+            infection_seeds=args.infection_seeds,
+            immunity_mask = immunity_mask
         )
     elif model_type == "dissipation":
         return DissipationModelEnvironment(
@@ -185,41 +206,67 @@ def save_as_image(data, output_path, image_format):
         plt.close()
 
 
-def save_as_graph(data, output_path, timestep, status_data=None):
+def save_as_graph(data, output_path, timestep, status_data=None, immunity_map=None):
     """Sauvegarde les données sous forme de graphe spatial."""
     height, width = data.shape
     
-    # Créer les coordonnées des nœuds
+    # Fallback just in case immunity_map isn't provided
+    if immunity_map is None:
+        immunity_map = np.zeros((height, width), dtype=int)
+    
     nodes = []
     node_features = []
-    node_status = []  # Ajouter le status SIR
+    node_status = []
     
+    # 1. Create a map to track the new ID of each valid node.
+    # We initialize with -1. If a node remains -1, it means it's an immune node.
+    node_id_map = np.full((height, width), -1, dtype=int)
+    current_node_id = 0
+    
+    # Build nodes and map their IDs
     for i in range(height):
         for j in range(width):
-            nodes.append((i, j))
-            node_features.append(data[i, j])
-            if status_data is not None:
-                node_status.append(status_data[i, j])
-            else:
-                node_status.append(0.0)
+            if immunity_map[i, j] == 0:  # Normal node
+                node_id_map[i, j] = current_node_id
+                nodes.append((i, j))
+                node_features.append(data[i, j])
+                
+                if status_data is not None:
+                    node_status.append(status_data[i, j])
+                else:
+                    node_status.append(0.0)
+                    
+                current_node_id += 1  # Increment only for valid nodes
     
-    # Créer les arêtes (connexions 4-voisinage)
+    # 2. Create the edges (4-neighborhood)
     edges = []
     for i in range(height):
         for j in range(width):
-            node_id = i * width + j
-            # Droite
+            u_id = node_id_map[i, j]
+            
+            # If the current node is immune, skip it entirely
+            if u_id == -1:
+                continue
+            
+            # Check Right neighbor
             if j < width - 1:
-                edges.append((node_id, node_id + 1))
-            # Bas
+                v_id_right = node_id_map[i, j + 1]
+                # Only add edge if the right neighbor is also NOT immune
+                if v_id_right != -1:
+                    edges.append((u_id, v_id_right))
+            
+            # Check Bottom neighbor
             if i < height - 1:
-                edges.append((node_id, node_id + width))
+                v_id_bottom = node_id_map[i + 1, j]
+                # Only add edge if the bottom neighbor is also NOT immune
+                if v_id_bottom != -1:
+                    edges.append((u_id, v_id_bottom))
     
-    # Sauvegarder au format NumPy pour faciliter le chargement
+    # 3. Sauvegarder au format NumPy
     graph_data = {
         "nodes": np.array(nodes),
         "node_features": np.array(node_features),
-        "node_status": np.array(node_status),  # Ajouter status SIR
+        "node_status": np.array(node_status),
         "edges": np.array(edges),
         "timestep": timestep,
         "shape": (height, width)
@@ -228,7 +275,7 @@ def save_as_graph(data, output_path, timestep, status_data=None):
     np.save(output_path, graph_data)
 
 
-def run_simulation(sim_id, args, output_base_dir):
+def run_simulation(sim_id, args, output_base_dir, immunity_mask=None):
     """Exécute une simulation complète."""
     # Créer le dossier de simulation
     sim_dir = output_base_dir / f"sim_{sim_id:04d}"
@@ -255,7 +302,8 @@ def run_simulation(sim_id, args, output_base_dir):
         args.grid_size,
         args.grid_size,
         sim_seed,
-        args
+        args,
+        immunity_mask=immunity_mask
     )
     
     # Métadonnées de la simulation
@@ -291,13 +339,15 @@ def run_simulation(sim_id, args, output_base_dir):
         # Sauvegarder les données au format graphe
         if "graphs" in args.output_formats:
             graph_path = graphs_dir / f"t_{t:04d}.npy"
-            save_as_graph(env.value, graph_path, t, status_data)
+            save_as_graph(env.value, graph_path, t, status_data, immunity_map=immunity_mask)
         
         # Faire évoluer l'environnement
         env.proceed(delta_t=1.0)
     
     # Sauvegarder les métadonnées
     with open(sim_dir / "metadata.json", "w") as f:
+        print(metadata)
+        print(type(metadata))
         json.dump(metadata, f, indent=2)
     
     return metadata
@@ -332,14 +382,18 @@ def main():
         "simulations": []
     }
     
+    im_mask = load_immunity_map(args.imumask)
+    
     # Générer les simulations
     for sim_id in range(args.num_simulations):
         print(f"\n[{sim_id + 1}/{args.num_simulations}] Génération de la simulation {sim_id}...")
-        sim_metadata = run_simulation(sim_id, args, output_base_dir)
+        sim_metadata = run_simulation(sim_id, args, output_base_dir, immunity_mask=im_mask)
+        print(sim_metadata)
         global_metadata["simulations"].append(sim_metadata)
     
     # Sauvegarder les métadonnées globales
     with open(output_base_dir / "generation_metadata.json", "w") as f:
+        print(global_metadata)
         json.dump(global_metadata, f, indent=2)
     
     print(f"\n{'='*70}")

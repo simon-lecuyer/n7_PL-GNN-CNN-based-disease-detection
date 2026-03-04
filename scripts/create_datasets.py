@@ -131,14 +131,21 @@ def collect_samples_unified(input_dir):
     """
     # Utiliser CNN comme référence pour identifier les paires disponibles
     cnn_dir = Path(input_dir) / "cnn"
-    
+    grid_data_field_name = "data"
+    ref_dir = cnn_dir
+
     if not cnn_dir.exists():
-        return []
+        gnn_dir = Path(input_dir) / "gnn"
+        if gnn_dir.exists():
+            ref_dir = gnn_dir
+            grid_data_field_name = "node_features"
+        else:
+            return []
     
     pairs = []
     
     # Parcourir toutes les simulations
-    for sim_dir in sorted(cnn_dir.glob("sim_*")):
+    for sim_dir in sorted(ref_dir.glob("sim_*")):
         sim_id = int(sim_dir.name.split("_")[1])
         
         # Parcourir tous les timesteps
@@ -147,7 +154,8 @@ def collect_samples_unified(input_dir):
             
             # Charger pour obtenir infection level (après inversion)
             data = np.load(sample_file, allow_pickle=True).item()
-            infection_level = float(data["data"].mean())
+            print(data)
+            infection_level = float(data[grid_data_field_name].mean())
             
             pairs.append((sim_id, timestep, infection_level))
     
@@ -364,7 +372,6 @@ def compute_split_statistics(train, val, test):
     
     return stats
 
-
 def main():
     """Fonction principale."""
     args = parse_args()
@@ -424,20 +431,36 @@ def main():
         return
     
     print(f"  {len(pairs)} paires identifiées")
+
+    dict_pairs = [
+        {"sim_id": p[0], "timestep": p[1], "infection_level": p[2]} 
+        for p in pairs
+    ]
+
+    if args.create_sequences:
+        print("Creation des sequences")
+        sequences = create_temporal_sequences(dict_pairs, args.sequence_length, args.sequence_stride)
+        print(f"  {len(sequences)} séquences créées")
+        print(sequences[0])
+    else: 
+        sequences= [
+            {"sequence": [p], "target": p, "sim_id": p["sim_id"], "start_timestep": p["timestep"]} 
+            for p in dict_pairs
+        ]
     
     # Créer les indices pour le split
-    all_indices = np.arange(len(pairs))
-    pairs_array = np.array(pairs, dtype=object)
-    
+    all_indices = np.arange(len(sequences))
+
     # Stratification
     if args.stratify_by == "simulation":
-        stratify_labels = pairs_array[:, 0].astype(int)  # sim_id
+        stratify_labels = np.array([seq["sim_id"] for seq in sequences]).astype(int)
     elif args.stratify_by == "infection_level":
-        levels = pairs_array[:, 2].astype(float)
+        levels = np.array([seq["target"]["infection_level"] for seq in sequences]).astype(float)
         bins = [0, 0.1, 0.3, 0.5, 0.7, 1.0]
         stratify_labels = np.digitize(levels, bins)
     else:
         stratify_labels = None
+    
     
     # Split une seule fois
     print("Split unifié des données...")
@@ -467,9 +490,9 @@ def main():
             random_state=args.seed
         )
     
-    train_pairs = [pairs[i] for i in train_idx]
-    val_pairs = [pairs[i] for i in val_idx]
-    test_pairs = [pairs[i] for i in test_idx]
+    train_pairs = [sequences[i] for i in train_idx]
+    val_pairs = [sequences[i] for i in val_idx]
+    test_pairs = [sequences[i] for i in test_idx]
     
     print(f"  Train: {len(train_pairs)} paires")
     print(f"  Val: {len(val_pairs)} paires")
@@ -492,11 +515,35 @@ def main():
         # Créer un mapping (sim_id, timestep) -> sample
         sample_map = {(s["sim_id"], s["timestep"]): s for s in all_samples}
         
+        def map_format_sequences(raw_sequences):
+            mapped_list = []
+            for seq_obj in raw_sequences:
+                try:
+                    # Trouve les données complètes (GNN ou CNN) pour chaque pas de temps
+                    mapped_seq = [
+                        sample_map[(s["sim_id"], s["timestep"])] 
+                        for s in seq_obj["sequence"]
+                    ]
+                    # Trouve les données pour la cible
+                    mapped_target = sample_map[(seq_obj["target"]["sim_id"], seq_obj["target"]["timestep"])]
+                    
+                    # Reconstruit l'objet séquence complet
+                    mapped_list.append({
+                        "sequence": mapped_seq,
+                        "target": mapped_target,
+                        "sim_id": seq_obj["sim_id"],
+                        "start_timestep": seq_obj['start_timestep']
+                    })
+                except KeyError:
+                    # Si un fichier spécifique au format manque pour cette séquence, on l'ignore
+                    continue 
+            return mapped_list
+
         # Appliquer le split unifié
-        train = [sample_map[(sim_id, timestep)] for sim_id, timestep, _ in train_pairs if (sim_id, timestep) in sample_map]
-        val = [sample_map[(sim_id, timestep)] for sim_id, timestep, _ in val_pairs if (sim_id, timestep) in sample_map]
-        test = [sample_map[(sim_id, timestep)] for sim_id, timestep, _ in test_pairs if (sim_id, timestep) in sample_map]
-        
+        train = map_format_sequences(train_pairs)
+        val = map_format_sequences(val_pairs)
+        test = map_format_sequences(test_pairs)
+
         print(f"  Train: {len(train)} échantillons")
         print(f"  Val: {len(val)} échantillons")
         print(f"  Test: {len(test)} échantillons")

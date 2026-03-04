@@ -145,10 +145,8 @@ def train(config_path="configs/gnn_config.yaml"):
     name = config["experiment_name"]
 
     checkpoint_path = config["data"]["checkpoint_path"]
+    log_path = f"{checkpoint_path}/{name}.csv"
     checkpoint_path = f"{checkpoint_path}/{name}.pt"
-
-    checkpoint_path = config["data"]["log_path"]
-    log_path = f"{log_path}/{name}.csv"
 
     if model_cfg["type"] == "spatial":
         mask_threshold = 0.3
@@ -201,7 +199,7 @@ def train(config_path="configs/gnn_config.yaml"):
             model.eval()
             total_val_loss = 0.0
             val_pbar = tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]")
-            with torch.random.fork_rng(devices=[device]):
+            with torch.random.fork_rng(devices=[]):
                 torch.manual_seed(config['training']['seed'])
                 with torch.no_grad():
                     for graphs in val_pbar:

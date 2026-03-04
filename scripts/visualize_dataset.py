@@ -210,6 +210,47 @@ def get_gnn_data(data: Dict) -> Dict:
         "shape": data["shape"],
     }
 
+def get_subgraph(gnn_data, x_max=20, y_max=20):
+    """
+    Creates a valid GNN dictionary for a subset of the grid.
+    Handles node filtering and edge re-indexing automatically.
+    """
+    nodes = gnn_data['nodes']
+    edges = gnn_data['edges']
+    features = gnn_data['node_features']
+    h, w = gnn_data['shape']
+
+    # 1. Identify Nodes in the Region of Interest (ROI)
+    if nodes.ndim == 1:
+        ys, xs = np.divmod(nodes, w)
+    else:
+        xs, ys = nodes[:, 0], nodes[:, 1]
+        
+    # Create a boolean mask for nodes within the box
+    node_mask = (xs < x_max) & (ys < y_max)
+    
+    # 2. Filter Nodes & Features
+    new_nodes = nodes[node_mask]
+    new_features = features[node_mask]
+    
+    # 3. Remap Edges
+    full_to_subset_map = np.full(len(nodes), -1)
+    full_to_subset_map[node_mask] = np.arange(np.sum(node_mask))
+    
+    # Find edges where BOTH source and target are in the ROI
+    edge_mask = node_mask[edges[:, 0]] & node_mask[edges[:, 1]]
+    valid_edges = edges[edge_mask]
+    
+    # Transform the old indices to the new subset indices
+    new_edges = full_to_subset_map[valid_edges]
+    
+    return {
+        "nodes": new_nodes,
+        "edges": new_edges,
+        "node_features": new_features,
+        "shape": (y_max, x_max) # New shape for the plot limits
+    }
+
 
 # ──────────────────────────────────────────────────────────────
 # Mode: samples
