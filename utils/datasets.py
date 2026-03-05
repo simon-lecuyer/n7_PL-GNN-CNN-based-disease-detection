@@ -90,17 +90,32 @@ class DiseaseDetectionDataset(Dataset):
             if self.transform:
                 img = self.transform(img)
             
+            # Créer le label/target à partir du status si disponible
+            label = None
+            if "status" in data:
+                # Status: 0=Susceptible, >0=Infected, -1=Recovered, -2=Immune
+                # Label: 0=Sain (S), 1=Infecté (I), 2=Recovered (R)
+                status = data["status"]
+                label = np.zeros_like(status, dtype=np.int64)
+                label[status > 0] = 1  # Infected
+                label[status == -1] = 2  # Recovered
+                label = torch.from_numpy(label)
+            
             if self.return_metadata:
                 metadata = {
                     "sim_id": sample["sim_id"],
                     "timestep": sample["timestep"],
                     "infection_level": sample["infection_level"],
                     "original_shape": data.get("original_shape"),
-                    "crop_bbox": data.get("crop_bbox")
+                    "crop_bbox": data.get("crop_bbox"),
+                    "label": label
                 }
                 return img, metadata
             else:
-                return img
+                if label is not None:
+                    return img, label
+                else:
+                    return img
         
         else:  # GNN
             # Format GNN: dict avec nodes, edges, features
@@ -110,6 +125,18 @@ class DiseaseDetectionDataset(Dataset):
                 "node_features": torch.from_numpy(data["node_features"]),
                 "shape": data["shape"]
             }
+            
+            # Créer le label/target à partir du status si disponible
+            label = None
+            if "node_status" in data:
+                # Status: 0=Susceptible, >0=Infected, -1=Recovered, -2=Immune
+                # Label: 0=Sain (S), 1=Infecté (I), 2=Recovered (R)
+                status = data["node_status"]
+                label = np.zeros_like(status, dtype=np.int64)
+                label[status > 0] = 1  # Infected
+                label[status == -1] = 2  # Recovered
+                label = torch.from_numpy(label)
+                graph["label"] = label
             
             if self.return_metadata:
                 metadata = {
@@ -268,6 +295,23 @@ def collate_fn_temporal_cnn(batch):
         return sequences_batch, targets_batch
 
 
+def collate_fn_temporal_gnn(batch):
+    """
+    Custom collate function for TemporalDiseaseDataset.
+
+    Each batch element is:
+        (sequence, target, metadata)
+
+    We return lists without merging dict keys.
+    """
+
+    sequences = [item[0] for item in batch]
+    targets = [item[1] for item in batch]
+    metadatas = [item[2] for item in batch]
+
+    return sequences, targets, metadatas
+
+
 def get_dataloader(
     split_file: str,
     format: str,
@@ -303,7 +347,7 @@ def get_dataloader(
             transform=transform,
             **kwargs
         )
-        collate_fn = collate_fn_temporal_cnn if format == "cnn" else None
+        collate_fn = collate_fn_temporal_cnn if format == "cnn" else collate_fn_temporal_gnn
     else:
         dataset = DiseaseDetectionDataset(
             split_file,
