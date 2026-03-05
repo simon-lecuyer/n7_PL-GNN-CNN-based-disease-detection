@@ -133,7 +133,253 @@ def plot_temporal_gnn_sample(config_path="configs/gnn_config.yaml", grid_size=No
     plt.tight_layout()
     plt.show()
 
+def plot_temporal_gnn_sample_n(config_path="configs/gnn_config.yaml", grid_size=None, n_samples=3):
 
+    if not os.path.exists(config_path):
+        print(f"Config file not found: {config_path}")
+        return
+
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    device = get_device(config['training'].get('device', 'auto'))
+    is_temporal = (config["model"]["type"] == "temporal")
+
+    test_loader = get_dataloader(
+        config["data"]["test_path"],
+        format="gnn",
+        batch_size=16,
+        shuffle=True,
+        is_temporal=is_temporal
+    )
+
+    model_cfg = config["model"]
+
+    name = config["experiment_name"]
+    checkpoint_path = config["data"]["checkpoint_path"]
+    checkpoint_path = f"{checkpoint_path}/{name}.pt"
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    if not is_temporal:
+        model = DiseaseGNN(
+            in_channels=model_cfg["in_channels"],
+            hidden_dim=model_cfg["hidden_dim"],
+            num_layers=model_cfg["num_layers"],
+            out_channels=model_cfg["out_channels"],
+            dropout=model_cfg["dropout"]
+        ).to(device)
+    else:
+        model = TemporalDiseaseGNN(
+            in_channels=model_cfg["in_channels"],
+            hidden_dim=model_cfg["hidden_dim"],
+            num_layers=model_cfg["num_layers"],
+            out_channels=model_cfg["out_channels"],
+            dropout=model_cfg["dropout"]
+        ).to(device)
+
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    sequences, targets, md = next(iter(test_loader))
+
+    batch_size = len(sequences)
+    n_samples = min(n_samples, batch_size)
+
+    indices = random.sample(range(batch_size), n_samples)
+
+    # determine sequence length dynamically
+    seq_len = len(sequences[0])
+    cols = seq_len + 3
+
+    fig, axes = plt.subplots(n_samples, cols, figsize=(3 * cols, 4 * n_samples))
+
+    if n_samples == 1:
+        axes = np.expand_dims(axes, axis=0)
+
+    for row, idx in enumerate(indices):
+
+        seq = sequences[idx]
+        target = targets[idx]
+        meta = md[idx]
+
+        seq_len = len(seq)
+
+        for graph in seq:
+            graph["node_features"] = graph["node_features"].float().to(device)
+            graph["edges"] = graph["edges"].long().to(device)
+
+        target["node_features"] = target["node_features"].float().to(device)
+
+        with torch.no_grad():
+            pred = model(seq)
+
+        pred = pred.squeeze().cpu().numpy()
+        y_true = target["node_features"][:, 0].cpu().numpy()
+
+        H, W = target["shape"]
+
+        pred_img = pred.reshape(H, W)
+        true_img = y_true.reshape(H, W)
+
+        abs_error = np.abs(pred_img - true_img)
+        sq_error = (pred_img - true_img) ** 2
+
+        mae = np.mean(abs_error)
+        mse = np.mean(sq_error)
+        rmse = np.sqrt(mse)
+
+        for t in range(seq_len):
+            img = seq[t]["node_features"][:, 0].cpu().numpy().reshape(H, W)
+            axes[row, t].imshow(img, cmap="YlOrRd", vmin=0, vmax=1)
+            axes[row, t].set_title(f"t-{seq_len - t}")
+            axes[row, t].axis("off")
+
+        axes[row, seq_len].imshow(true_img, cmap="YlOrRd", vmin=0, vmax=1)
+        axes[row, seq_len].set_title("Target")
+        axes[row, seq_len].axis("off")
+
+        axes[row, seq_len + 1].imshow(pred_img, cmap="YlOrRd", vmin=0, vmax=1)
+        axes[row, seq_len + 1].set_title("Prediction")
+        axes[row, seq_len + 1].axis("off")
+
+        axes[row, seq_len + 2].imshow(abs_error, cmap="YlOrRd",  vmin=0, vmax=1)
+        axes[row, seq_len + 2].set_title(
+            f"Error\nMAE={mae:.4f}\nMSE={mse:.4f}\nRMSE={rmse:.4f}"
+        )
+        axes[row, seq_len + 2].axis("off")
+
+        axes[row, 0].set_ylabel(
+            f"Sim {meta['sim_id']}\nstart_t={meta['start_timestep']}",
+            fontsize=10
+        )
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_temporal_irregular_gnn_sample_n(config_path="configs/gnn_config.yaml", grid_size=None, n_samples=3):
+
+    if not os.path.exists(config_path):
+        print(f"Config file not found: {config_path}")
+        return
+
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    device = get_device(config['training'].get('device', 'auto'))
+    is_temporal = (config["model"]["type"] == "temporal")
+
+    test_loader = get_dataloader(
+        config["data"]["test_path"],
+        format="gnn",
+        batch_size=16,
+        shuffle=True,
+        is_temporal=is_temporal
+    )
+
+    model_cfg = config["model"]
+
+    name = config["experiment_name"]
+    checkpoint_path = config["data"]["checkpoint_path"]
+    checkpoint_path = f"{checkpoint_path}/{name}.pt"
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    if not is_temporal:
+        model = DiseaseGNN(
+            in_channels=model_cfg["in_channels"],
+            hidden_dim=model_cfg["hidden_dim"],
+            num_layers=model_cfg["num_layers"],
+            out_channels=model_cfg["out_channels"],
+            dropout=model_cfg["dropout"]
+        ).to(device)
+    else:
+        model = TemporalDiseaseGNN(
+            in_channels=model_cfg["in_channels"],
+            hidden_dim=model_cfg["hidden_dim"],
+            num_layers=model_cfg["num_layers"],
+            out_channels=model_cfg["out_channels"],
+            dropout=model_cfg["dropout"]
+        ).to(device)
+
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.eval()
+
+    sequences, targets, md = next(iter(test_loader))
+
+    batch_size = len(sequences)
+    n_samples = min(n_samples, batch_size)
+
+    indices = random.sample(range(batch_size), n_samples)
+
+    # determine sequence length dynamically
+    seq_len = len(sequences[0])
+    cols = seq_len + 3
+
+    fig, axes = plt.subplots(n_samples, cols, figsize=(3 * cols, 4 * n_samples))
+
+    if n_samples == 1:
+        axes = np.expand_dims(axes, axis=0)
+
+    for row, idx in enumerate(indices):
+
+        seq = sequences[idx]
+        target = targets[idx]
+        meta = md[idx]
+
+        seq_len = len(seq)
+
+        for graph in seq:
+            graph["node_features"] = graph["node_features"].float().to(device)
+            graph["edges"] = graph["edges"].long().to(device)
+
+        target["node_features"] = target["node_features"].float().to(device)
+
+        with torch.no_grad():
+            pred = model(seq)
+
+        pred = pred.squeeze().cpu().numpy()
+        y_true = target["node_features"][:, 0].cpu().numpy()
+
+        H, W = target["shape"]
+
+        pred_img = pred.reshape(H, W)
+        true_img = y_true.reshape(H, W)
+
+        abs_error = np.abs(pred_img - true_img)
+        sq_error = (pred_img - true_img) ** 2
+
+        mae = np.mean(abs_error)
+        mse = np.mean(sq_error)
+        rmse = np.sqrt(mse)
+
+        for t in range(seq_len):
+            img = seq[t]["node_features"][:, 0].cpu().numpy().reshape(H, W)
+            axes[row, t].imshow(img, cmap="YlOrRd", vmin=0, vmax=1)
+            axes[row, t].set_title(f"t-{seq_len - t}")
+            axes[row, t].axis("off")
+
+        axes[row, seq_len].imshow(true_img, cmap="YlOrRd", vmin=0, vmax=1)
+        axes[row, seq_len].set_title("Target")
+        axes[row, seq_len].axis("off")
+
+        axes[row, seq_len + 1].imshow(pred_img, cmap="YlOrRd", vmin=0, vmax=1)
+        axes[row, seq_len + 1].set_title("Prediction")
+        axes[row, seq_len + 1].axis("off")
+
+        axes[row, seq_len + 2].imshow(abs_error, cmap="YlOrRd",  vmin=0, vmax=1)
+        axes[row, seq_len + 2].set_title(
+            f"Error\nMAE={mae:.4f}\nMSE={mse:.4f}\nRMSE={rmse:.4f}"
+        )
+        axes[row, seq_len + 2].axis("off")
+
+        axes[row, 0].set_ylabel(
+            f"Sim {meta['sim_id']}\nstart_t={meta['start_timestep']}",
+            fontsize=10
+        )
+
+    plt.tight_layout()
+    plt.show()
 
 def main():
     args = parse_args()
