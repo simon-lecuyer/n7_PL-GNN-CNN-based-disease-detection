@@ -1,0 +1,18 @@
+{
+  "config": "configs/gnn_slow_spread_short_infection_seq3.yaml",
+  "experiment_name": "gnn_slow_spread_short_infection_seq3_ep10",
+  "saved_samples": 1,
+  "mean_mae": 0.002551560290157795,
+  "mean_mse": 0.0013680427800863981,
+  "mean_rmse": 0.03698706233382692,
+  "samples": [
+    {
+      "mae": 0.002551560290157795,
+      "mse": 0.0013680427800863981,
+      "rmse": 0.03698706233382692,
+      "sim_id": 4,
+      "start_timestep": 0,
+      "file": "results/gnn_experiments/slow_spread_short_infection/seq3/sample_01_sim4_t0.png"
+    }
+  ]
+}

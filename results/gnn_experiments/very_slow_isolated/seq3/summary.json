@@ -1,0 +1,18 @@
+{
+  "config": "configs/gnn_very_slow_isolated_seq3.yaml",
+  "experiment_name": "gnn_very_slow_isolated_seq3_ep10",
+  "saved_samples": 1,
+  "mean_mae": 0.0006349043105728924,
+  "mean_mse": 0.00041955368942581117,
+  "mean_rmse": 0.020483009774586624,
+  "samples": [
+    {
+      "mae": 0.0006349043105728924,
+      "mse": 0.00041955368942581117,
+      "rmse": 0.020483009774586624,
+      "sim_id": 4,
+      "start_timestep": 0,
+      "file": "results/gnn_experiments/very_slow_isolated/seq3/sample_01_sim4_t0.png"
+    }
+  ]
+}

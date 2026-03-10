@@ -1,0 +1,137 @@
+[
+  {
+    "dataset": "slow_spread_short_infection",
+    "sequence_length": 3,
+    "experiment_name": "gnn_slow_spread_short_infection_seq3_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_slow_spread_short_infection_seq3_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "slow_spread_short_infection",
+    "sequence_length": 5,
+    "experiment_name": "gnn_slow_spread_short_infection_seq5_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_slow_spread_short_infection_seq5_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "slow_spread_short_infection",
+    "sequence_length": 10,
+    "experiment_name": "gnn_slow_spread_short_infection_seq10_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_slow_spread_short_infection_seq10_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "medium_spread_medium_infection",
+    "sequence_length": 3,
+    "experiment_name": "gnn_medium_spread_medium_infection_seq3_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_medium_spread_medium_infection_seq3_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "medium_spread_medium_infection",
+    "sequence_length": 5,
+    "experiment_name": "gnn_medium_spread_medium_infection_seq5_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_medium_spread_medium_infection_seq5_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "medium_spread_medium_infection",
+    "sequence_length": 10,
+    "experiment_name": "gnn_medium_spread_medium_infection_seq10_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_medium_spread_medium_infection_seq10_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "fast_spread_long_infection",
+    "sequence_length": 3,
+    "experiment_name": "gnn_fast_spread_long_infection_seq3_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_fast_spread_long_infection_seq3_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "fast_spread_long_infection",
+    "sequence_length": 5,
+    "experiment_name": "gnn_fast_spread_long_infection_seq5_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_fast_spread_long_infection_seq5_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "fast_spread_long_infection",
+    "sequence_length": 10,
+    "experiment_name": "gnn_fast_spread_long_infection_seq10_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_fast_spread_long_infection_seq10_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "fast_multi_source",
+    "sequence_length": 3,
+    "experiment_name": "gnn_fast_multi_source_seq3_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_fast_multi_source_seq3_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "fast_multi_source",
+    "sequence_length": 5,
+    "experiment_name": "gnn_fast_multi_source_seq5_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_fast_multi_source_seq5_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "fast_multi_source",
+    "sequence_length": 10,
+    "experiment_name": "gnn_fast_multi_source_seq10_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_fast_multi_source_seq10_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "very_slow_isolated",
+    "sequence_length": 3,
+    "experiment_name": "gnn_very_slow_isolated_seq3_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_very_slow_isolated_seq3_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "very_slow_isolated",
+    "sequence_length": 5,
+    "experiment_name": "gnn_very_slow_isolated_seq5_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_very_slow_isolated_seq5_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  },
+  {
+    "dataset": "very_slow_isolated",
+    "sequence_length": 10,
+    "experiment_name": "gnn_very_slow_isolated_seq10_ep10",
+    "config": "configs/generated_gnn_experiments/gnn_very_slow_isolated_seq10_ep10.yaml",
+    "train_returncode": 0,
+    "test_returncode": 0,
+    "test_loss": null
+  }
+]

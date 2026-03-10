@@ -1,0 +1,18 @@
+{
+  "config": "configs/gnn_medium_spread_medium_infection_seq10.yaml",
+  "experiment_name": "gnn_medium_spread_medium_infection_seq10_ep10",
+  "saved_samples": 1,
+  "mean_mae": 0.04627041518688202,
+  "mean_mse": 0.021420426666736603,
+  "mean_rmse": 0.14635718864045114,
+  "samples": [
+    {
+      "mae": 0.04627041518688202,
+      "mse": 0.021420426666736603,
+      "rmse": 0.14635718864045114,
+      "sim_id": 4,
+      "start_timestep": 0,
+      "file": "results/gnn_experiments/medium_spread_medium_infection/seq10/sample_01_sim4_t0.png"
+    }
+  ]
+}

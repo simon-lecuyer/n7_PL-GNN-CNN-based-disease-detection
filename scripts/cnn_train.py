@@ -212,7 +212,7 @@ def train():
     fig = plt.figure(figsize=(14, 10))
     gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3)
     
-    epochs = np.arange(1, args.epochs + 1)
+    epochs = np.arange(1, len(history['train_mse']) + 1)
     
     # Helper function for smoothing
     def smooth_curve(values, window=3):

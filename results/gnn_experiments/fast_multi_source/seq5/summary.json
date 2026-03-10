@@ -1,0 +1,18 @@
+{
+  "config": "configs/gnn_fast_multi_source_seq5.yaml",
+  "experiment_name": "gnn_fast_multi_source_seq5_ep10",
+  "saved_samples": 1,
+  "mean_mae": 0.032330192625522614,
+  "mean_mse": 0.01042733620852232,
+  "mean_rmse": 0.10211432910479469,
+  "samples": [
+    {
+      "mae": 0.032330192625522614,
+      "mse": 0.01042733620852232,
+      "rmse": 0.10211432910479469,
+      "sim_id": 4,
+      "start_timestep": 0,
+      "file": "results/gnn_experiments/fast_multi_source/seq5/sample_01_sim4_t0.png"
+    }
+  ]
+}

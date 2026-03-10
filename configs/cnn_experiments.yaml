@@ -1,0 +1,81 @@
+# Configuration des expériences CNN pour détection early/late stage
+# Run: python scripts/run_cnn_experiments.py --config configs/cnn_experiments.yaml
+
+experiment_name: "cnn_early_late_stage_detection"
+base_output_dir: "results/cnn_experiments"
+
+# Paramètres communs
+common:
+  grid_size: 64
+  num_simulations: 50  # Augmenter pour plus de robustesse
+  batch_size: 16
+  epochs: 45
+  lr: 0.001
+  patience: 10
+  require_consecutive: true
+  loss_type: "mse_mae_combined" 
+
+# Configurations de datasets à tester
+datasets:
+  # Propagation lente, infection courte (dissipation rapide)
+  - name: "slow_spread_short_infection"
+    model_type: "epidemic"
+    p_transmission: 0.1
+    spread_dimension: 7
+    infection_duration: 3
+    timesteps: 25
+    infection_seeds: 3
+    
+  # Propagation moyenne, infection moyenne (cas standard)
+  - name: "medium_spread_medium_infection"
+    model_type: "epidemic"
+    p_transmission: 0.2
+    spread_dimension: 11
+    infection_duration: 5
+    timesteps: 30
+    infection_seeds: 3
+    
+  # Propagation rapide, infection longue (épidémie sévère)
+  - name: "fast_spread_long_infection"
+    model_type: "epidemic"
+    p_transmission: 0.3
+    spread_dimension: 15
+    infection_duration: 10
+    timesteps: 30
+    infection_seeds: 3
+    
+    
+  # Propagation rapide, plusieurs foyers
+  - name: "fast_multi_source"
+    model_type: "epidemic"
+    p_transmission: 0.25
+    spread_dimension: 13
+    infection_duration: 7
+    timesteps: 28
+    infection_seeds: 5
+
+# Configurations de sequence_length à tester
+sequence_configs:
+  - name: "early_stage_3"
+    sequence_length: 3
+    description: "Détection très précoce (3 timesteps)"
+    
+  - name: "early_stage_5"
+    sequence_length: 5
+    description: "Détection précoce (5 timesteps)"
+    
+  - name: "late_stage_10"
+    sequence_length: 10
+    description: "Détection tardive/baseline (10 timesteps)"
+
+# Métriques à calculer
+metrics:
+  - mse
+  - mae
+
+# Visualisations à générer
+visualizations:
+  - training_curves
+  - prediction_samples
+  - error_heatmaps
+  - early_vs_late_comparison

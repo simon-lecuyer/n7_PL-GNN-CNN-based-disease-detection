@@ -50,6 +50,6 @@ for model_type in ['cnn', 'gnn']:
     print(f'Total échantillons: train={len(train)}, val={len(val)}, test={len(test)}')
     
     if not (train_val or train_test or val_test):
-        print(f'\n✅ PAS DE CHEVAUCHEMENT - Les splits sont propres pour {model_type.upper()}!')
+        print(f'\n PAS DE CHEVAUCHEMENT - Les splits sont propres pour {model_type.upper()}!')
     else:
-        print(f'\n❌ ATTENTION: Chevauchement détecté pour {model_type.upper()}!')
+        print(f'\n ATTENTION: Chevauchement détecté pour {model_type.upper()}!')
