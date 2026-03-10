@@ -69,7 +69,7 @@ def parse_args():
         type=str,
         default="simulation",
         choices=["simulation", "infection_level", "timestep", "none"],
-        help="Stratification (défaut: simulation)"
+        help="Stratification (défaut: simulation, appliquee au niveau simulation)"
     )
     parser.add_argument(
         "--min_samples_per_split",
@@ -122,46 +122,6 @@ def load_preprocessing_metadata(input_dir):
         return json.load(f)
 
 
-def collect_samples_unified(input_dir):
-    """
-    Collecte les paires (sim_id, timestep) disponibles (format-agnostic).
-    
-    Returns:
-        List de tuples (sim_id, timestep, infection_level)
-    """
-    # Utiliser CNN comme référence pour identifier les paires disponibles
-    cnn_dir = Path(input_dir) / "cnn"
-    grid_data_field_name = "data"
-    ref_dir = cnn_dir
-
-    if not cnn_dir.exists():
-        gnn_dir = Path(input_dir) / "gnn"
-        if gnn_dir.exists():
-            ref_dir = gnn_dir
-            grid_data_field_name = "node_features"
-        else:
-            return []
-    
-    pairs = []
-    
-    # Parcourir toutes les simulations
-    for sim_dir in sorted(ref_dir.glob("sim_*")):
-        sim_id = int(sim_dir.name.split("_")[1])
-        
-        # Parcourir tous les timesteps
-        for sample_file in sorted(sim_dir.glob("t_*.npy")):
-            timestep = int(sample_file.stem.split("_")[1])
-            
-            # Charger pour obtenir infection level (après inversion)
-            data = np.load(sample_file, allow_pickle=True).item()
-            print(data)
-            infection_level = float(data[grid_data_field_name].mean())
-            
-            pairs.append((sim_id, timestep, infection_level))
-    
-    return pairs
-
-
 def collect_samples(input_dir, format_type):
     """
     Collecte tous les échantillons pour un format donné.
@@ -184,7 +144,7 @@ def collect_samples(input_dir, format_type):
         for sample_file in sorted(sim_dir.glob("t_*.npy")):
             timestep = int(sample_file.stem.split("_")[1])
             
-            # Charger pour obtenir infection level (après inversion sémantique)
+            # Charger pour obtenir infection level
             data = np.load(sample_file, allow_pickle=True).item()
             
             if format_type == "cnn":
@@ -200,33 +160,6 @@ def collect_samples(input_dir, format_type):
             })
     
     return samples
-
-
-def stratify_samples(samples, stratify_by):
-    """
-    Crée des labels de stratification.
-    
-    Returns:
-        Array de labels pour stratification
-    """
-    if stratify_by == "simulation":
-        return np.array([s["sim_id"] for s in samples])
-    
-    elif stratify_by == "infection_level":
-        # Binning des niveaux d'infection
-        levels = np.array([s["infection_level"] for s in samples])
-        bins = [0, 0.1, 0.3, 0.5, 0.7, 1.0]
-        return np.digitize(levels, bins)
-    
-    elif stratify_by == "timestep":
-        # Binning des timesteps (début, milieu, fin)
-        timesteps = np.array([s["timestep"] for s in samples])
-        max_t = timesteps.max()
-        bins = [0, max_t // 3, 2 * max_t // 3, max_t]
-        return np.digitize(timesteps, bins)
-    
-    else:  # none
-        return None
 
 
 def create_temporal_sequences(samples, sequence_length, stride):
@@ -266,57 +199,90 @@ def create_temporal_sequences(samples, sequence_length, stride):
     return sequences
 
 
-def split_data(samples, train_ratio, val_ratio, test_ratio, stratify_labels, seed, min_samples):
+def _group_by_simulation(items):
+    """Groupe les elements par simulation."""
+    sim_map = {}
+    for item in items:
+        sim_id = item["sim_id"]
+        if sim_id not in sim_map:
+            sim_map[sim_id] = []
+        sim_map[sim_id].append(item)
+    return sim_map
+
+
+def _stratify_simulations(sim_map, stratify_by):
+    """Cree des labels de stratification au niveau simulation."""
+    if stratify_by == "infection_level":
+        sim_ids = sorted(sim_map.keys())
+        avg_levels = []
+        for sim_id in sim_ids:
+            levels = [s["infection_level"] for s in sim_map[sim_id]]
+            avg_levels.append(float(np.mean(levels)))
+        bins = [0, 0.1, 0.3, 0.5, 0.7, 1.0]
+        return np.digitize(np.array(avg_levels), bins)
+    return None
+
+
+def split_by_simulation(items, train_ratio, val_ratio, test_ratio, stratify_by, seed, min_samples):
     """
-    Split les données en train/val/test.
+    Split les donnees par simulations (pas par timestep).
     
     Returns:
-        train_samples, val_samples, test_samples
+        train_items, val_items, test_items
     """
-    # Vérifier ratios
-    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios doivent sommer à 1.0"
+    # Verifier ratios
+    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios doivent sommer a 1.0"
     
-    n_samples = len(samples)
+    sim_map = _group_by_simulation(items)
+    sim_ids = np.array(sorted(sim_map.keys()))
+    n_sims = len(sim_ids)
     
-    # Vérifier minimum
-    if n_samples < min_samples * 3:
-        print(f"⚠️  Nombre d'échantillons insuffisant ({n_samples}), split non-optimal")
+    # Verifier minimum
+    if n_sims < min_samples * 3:
+        print(f"⚠️  Nombre de simulations insuffisant ({n_sims}), split non-optimal")
+    
+    stratify_labels = _stratify_simulations(sim_map, stratify_by)
     
     # Premier split: train vs (val + test)
-    if stratify_labels is not None:
+    try:
         train_idx, temp_idx = train_test_split(
-            np.arange(n_samples),
+            np.arange(n_sims),
             test_size=(val_ratio + test_ratio),
             random_state=seed,
             stratify=stratify_labels
         )
-        
-        # Second split: val vs test
-        temp_labels = stratify_labels[temp_idx]
+    except ValueError:
+        train_idx, temp_idx = train_test_split(
+            np.arange(n_sims),
+            test_size=(val_ratio + test_ratio),
+            random_state=seed
+        )
+    
+    # Second split: val vs test
+    try:
+        temp_labels = stratify_labels[temp_idx] if stratify_labels is not None else None
         val_idx, test_idx = train_test_split(
             temp_idx,
             test_size=test_ratio / (val_ratio + test_ratio),
             random_state=seed,
             stratify=temp_labels
         )
-    else:
-        train_idx, temp_idx = train_test_split(
-            np.arange(n_samples),
-            test_size=(val_ratio + test_ratio),
-            random_state=seed
-        )
-        
+    except ValueError:
         val_idx, test_idx = train_test_split(
             temp_idx,
             test_size=test_ratio / (val_ratio + test_ratio),
             random_state=seed
         )
     
-    train_samples = [samples[i] for i in train_idx]
-    val_samples = [samples[i] for i in val_idx]
-    test_samples = [samples[i] for i in test_idx]
+    train_sims = set(sim_ids[train_idx])
+    val_sims = set(sim_ids[val_idx])
+    test_sims = set(sim_ids[test_idx])
     
-    return train_samples, val_samples, test_samples
+    train_items = [item for sim_id in train_sims for item in sim_map[sim_id]]
+    val_items = [item for sim_id in val_sims for item in sim_map[sim_id]]
+    test_items = [item for sim_id in test_sims for item in sim_map[sim_id]]
+    
+    return train_items, val_items, test_items
 
 
 def save_split(samples, output_file):
@@ -372,6 +338,7 @@ def compute_split_statistics(train, val, test):
     
     return stats
 
+
 def main():
     """Fonction principale."""
     args = parse_args()
@@ -414,6 +381,9 @@ def main():
     if args.create_sequences:
         print(f"  Sequences: longueur={args.sequence_length}, stride={args.sequence_stride}")
     print(f"{'='*70}\n")
+
+    if args.stratify_by in ["simulation", "timestep"]:
+        print("Note: Le split est toujours par simulation; la stratification choisie est ignoree.")
     
     # Métadonnées du dataset
     dataset_metadata = {
@@ -422,128 +392,45 @@ def main():
         "formats": {}
     }
     
-    # Faire le split UNE SEULE FOIS sur les paires (sim_id, timestep)
-    print("\nCollecte des paires (sim_id, timestep) unifiées...")
-    pairs = collect_samples_unified(input_dir)
-    
-    if not pairs:
-        print("Erreur: Aucune paire trouvée!")
-        return
-    
-    print(f"  {len(pairs)} paires identifiées")
-
-    dict_pairs = [
-        {"sim_id": p[0], "timestep": p[1], "infection_level": p[2]} 
-        for p in pairs
-    ]
-
-    if args.create_sequences:
-        print("Creation des sequences")
-        sequences = create_temporal_sequences(dict_pairs, args.sequence_length, args.sequence_stride)
-        print(f"  {len(sequences)} séquences créées")
-        print(sequences[0])
-    else: 
-        sequences= [
-            {"sequence": [p], "target": p, "sim_id": p["sim_id"], "start_timestep": p["timestep"]} 
-            for p in dict_pairs
-        ]
-    
-    # Créer les indices pour le split
-    all_indices = np.arange(len(sequences))
-
-    # Stratification
-    if args.stratify_by == "simulation":
-        stratify_labels = np.array([seq["sim_id"] for seq in sequences]).astype(int)
-    elif args.stratify_by == "infection_level":
-        levels = np.array([seq["target"]["infection_level"] for seq in sequences]).astype(float)
-        bins = [0, 0.1, 0.3, 0.5, 0.7, 1.0]
-        stratify_labels = np.digitize(levels, bins)
-    else:
-        stratify_labels = None
-    
-    
-    # Split une seule fois
-    print("Split unifié des données...")
-    if stratify_labels is not None:
-        train_idx, temp_idx = train_test_split(
-            all_indices,
-            test_size=(args.val_ratio + args.test_ratio),
-            random_state=args.seed,
-            stratify=stratify_labels
-        )
-        temp_labels = stratify_labels[temp_idx]
-        val_idx, test_idx = train_test_split(
-            temp_idx,
-            test_size=args.test_ratio / (args.val_ratio + args.test_ratio),
-            random_state=args.seed,
-            stratify=temp_labels
-        )
-    else:
-        train_idx, temp_idx = train_test_split(
-            all_indices,
-            test_size=(args.val_ratio + args.test_ratio),
-            random_state=args.seed
-        )
-        val_idx, test_idx = train_test_split(
-            temp_idx,
-            test_size=args.test_ratio / (args.val_ratio + args.test_ratio),
-            random_state=args.seed
-        )
-    
-    train_pairs = [sequences[i] for i in train_idx]
-    val_pairs = [sequences[i] for i in val_idx]
-    test_pairs = [sequences[i] for i in test_idx]
-    
-    print(f"  Train: {len(train_pairs)} paires")
-    print(f"  Val: {len(val_pairs)} paires")
-    print(f"  Test: {len(test_pairs)} paires")
-    
-    # Traiter chaque format en appliquant le même split
+    # Traiter chaque format
     for fmt in formats:
         print(f"\n{'='*50}")
         print(f"  Format: {fmt.upper()}")
         print(f"{'='*50}")
         
-        # Collecter tous les échantillons
+        # Collecter échantillons
         print("Collecte des échantillons...")
-        all_samples = collect_samples(input_dir, fmt)
+        samples = collect_samples(input_dir, fmt)
         
-        if not all_samples:
+        if not samples:
             print(f"Attention: Aucun échantillon trouvé pour {fmt}")
             continue
         
-        # Créer un mapping (sim_id, timestep) -> sample
-        sample_map = {(s["sim_id"], s["timestep"]): s for s in all_samples}
+        print(f"  {len(samples)} échantillons collectés")
         
-        def map_format_sequences(raw_sequences):
-            mapped_list = []
-            for seq_obj in raw_sequences:
-                try:
-                    # Trouve les données complètes (GNN ou CNN) pour chaque pas de temps
-                    mapped_seq = [
-                        sample_map[(s["sim_id"], s["timestep"])] 
-                        for s in seq_obj["sequence"]
-                    ]
-                    # Trouve les données pour la cible
-                    mapped_target = sample_map[(seq_obj["target"]["sim_id"], seq_obj["target"]["timestep"])]
-                    
-                    # Reconstruit l'objet séquence complet
-                    mapped_list.append({
-                        "sequence": mapped_seq,
-                        "target": mapped_target,
-                        "sim_id": seq_obj["sim_id"],
-                        "start_timestep": seq_obj['start_timestep']
-                    })
-                except KeyError:
-                    # Si un fichier spécifique au format manque pour cette séquence, on l'ignore
-                    continue 
-            return mapped_list
-
-        # Appliquer le split unifié
-        train = map_format_sequences(train_pairs)
-        val = map_format_sequences(val_pairs)
-        test = map_format_sequences(test_pairs)
-
+        # Séquences temporelles
+        if args.create_sequences:
+            print("Creation des sequences temporelles...")
+            sequences = create_temporal_sequences(
+                samples, args.sequence_length, args.sequence_stride
+            )
+            print(f"  {len(sequences)} sequences creees")
+            split_items = sequences
+        else:
+            split_items = samples
+        
+        # Split par simulation (evite la fuite entre timesteps)
+        print("Split des donnees par simulation...")
+        train, val, test = split_by_simulation(
+            split_items,
+            args.train_ratio,
+            args.val_ratio,
+            args.test_ratio,
+            args.stratify_by,
+            args.seed,
+            args.min_samples_per_split
+        )
+        
         print(f"  Train: {len(train)} échantillons")
         print(f"  Val: {len(val)} échantillons")
         print(f"  Test: {len(test)} échantillons")

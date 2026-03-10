@@ -1,0 +1,275 @@
+{
+  "num_models": 15,
+  "models": [
+    {
+      "config": "configs/gnn_fast_multi_source_seq10.yaml",
+      "experiment_name": "gnn_fast_multi_source_seq10_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.09927573055028915,
+      "mean_mse": 0.050376102328300476,
+      "mean_rmse": 0.22444621255058075,
+      "samples": [
+        {
+          "mae": 0.09927573055028915,
+          "mse": 0.050376102328300476,
+          "rmse": 0.22444621255058075,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/fast_multi_source/seq10/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_fast_multi_source_seq3.yaml",
+      "experiment_name": "gnn_fast_multi_source_seq3_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.015619770623743534,
+      "mean_mse": 0.003983906004577875,
+      "mean_rmse": 0.06311819075811564,
+      "samples": [
+        {
+          "mae": 0.015619770623743534,
+          "mse": 0.003983906004577875,
+          "rmse": 0.06311819075811564,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/fast_multi_source/seq3/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_fast_multi_source_seq5.yaml",
+      "experiment_name": "gnn_fast_multi_source_seq5_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.032330192625522614,
+      "mean_mse": 0.01042733620852232,
+      "mean_rmse": 0.10211432910479469,
+      "samples": [
+        {
+          "mae": 0.032330192625522614,
+          "mse": 0.01042733620852232,
+          "rmse": 0.10211432910479469,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/fast_multi_source/seq5/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_fast_spread_long_infection_seq10.yaml",
+      "experiment_name": "gnn_fast_spread_long_infection_seq10_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.07890880107879639,
+      "mean_mse": 0.04821596294641495,
+      "mean_rmse": 0.21958133560577262,
+      "samples": [
+        {
+          "mae": 0.07890880107879639,
+          "mse": 0.04821596294641495,
+          "rmse": 0.21958133560577262,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/fast_spread_long_infection/seq10/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_fast_spread_long_infection_seq3.yaml",
+      "experiment_name": "gnn_fast_spread_long_infection_seq3_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.01231316663324833,
+      "mean_mse": 0.003824504790827632,
+      "mean_rmse": 0.06184258072580438,
+      "samples": [
+        {
+          "mae": 0.01231316663324833,
+          "mse": 0.003824504790827632,
+          "rmse": 0.06184258072580438,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/fast_spread_long_infection/seq3/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_fast_spread_long_infection_seq5.yaml",
+      "experiment_name": "gnn_fast_spread_long_infection_seq5_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.020820830017328262,
+      "mean_mse": 0.010951824486255646,
+      "mean_rmse": 0.10465096505171677,
+      "samples": [
+        {
+          "mae": 0.020820830017328262,
+          "mse": 0.010951824486255646,
+          "rmse": 0.10465096505171677,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/fast_spread_long_infection/seq5/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_medium_spread_medium_infection_seq10.yaml",
+      "experiment_name": "gnn_medium_spread_medium_infection_seq10_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.04627041518688202,
+      "mean_mse": 0.021420426666736603,
+      "mean_rmse": 0.14635718864045114,
+      "samples": [
+        {
+          "mae": 0.04627041518688202,
+          "mse": 0.021420426666736603,
+          "rmse": 0.14635718864045114,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/medium_spread_medium_infection/seq10/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_medium_spread_medium_infection_seq3.yaml",
+      "experiment_name": "gnn_medium_spread_medium_infection_seq3_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.005068792030215263,
+      "mean_mse": 0.0024735010229051113,
+      "mean_rmse": 0.04973430428693169,
+      "samples": [
+        {
+          "mae": 0.005068792030215263,
+          "mse": 0.0024735010229051113,
+          "rmse": 0.04973430428693169,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/medium_spread_medium_infection/seq3/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_medium_spread_medium_infection_seq5.yaml",
+      "experiment_name": "gnn_medium_spread_medium_infection_seq5_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.014917034655809402,
+      "mean_mse": 0.006505564786493778,
+      "mean_rmse": 0.08065708144046484,
+      "samples": [
+        {
+          "mae": 0.014917034655809402,
+          "mse": 0.006505564786493778,
+          "rmse": 0.08065708144046484,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/medium_spread_medium_infection/seq5/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_slow_spread_short_infection_seq10.yaml",
+      "experiment_name": "gnn_slow_spread_short_infection_seq10_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.0026351320557296276,
+      "mean_mse": 0.001274412265047431,
+      "mean_rmse": 0.035698911258572455,
+      "samples": [
+        {
+          "mae": 0.0026351320557296276,
+          "mse": 0.001274412265047431,
+          "rmse": 0.035698911258572455,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/slow_spread_short_infection/seq10/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_slow_spread_short_infection_seq3.yaml",
+      "experiment_name": "gnn_slow_spread_short_infection_seq3_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.002551560290157795,
+      "mean_mse": 0.0013680427800863981,
+      "mean_rmse": 0.03698706233382692,
+      "samples": [
+        {
+          "mae": 0.002551560290157795,
+          "mse": 0.0013680427800863981,
+          "rmse": 0.03698706233382692,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/slow_spread_short_infection/seq3/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_slow_spread_short_infection_seq5.yaml",
+      "experiment_name": "gnn_slow_spread_short_infection_seq5_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.003113592742010951,
+      "mean_mse": 0.0013861104380339384,
+      "mean_rmse": 0.037230504133491646,
+      "samples": [
+        {
+          "mae": 0.003113592742010951,
+          "mse": 0.0013861104380339384,
+          "rmse": 0.037230504133491646,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/slow_spread_short_infection/seq5/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_very_slow_isolated_seq10.yaml",
+      "experiment_name": "gnn_very_slow_isolated_seq10_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.0007143040420487523,
+      "mean_mse": 0.00032081775134429336,
+      "mean_rmse": 0.01791138608104614,
+      "samples": [
+        {
+          "mae": 0.0007143040420487523,
+          "mse": 0.00032081775134429336,
+          "rmse": 0.01791138608104614,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/very_slow_isolated/seq10/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_very_slow_isolated_seq3.yaml",
+      "experiment_name": "gnn_very_slow_isolated_seq3_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.0006349043105728924,
+      "mean_mse": 0.00041955368942581117,
+      "mean_rmse": 0.020483009774586624,
+      "samples": [
+        {
+          "mae": 0.0006349043105728924,
+          "mse": 0.00041955368942581117,
+          "rmse": 0.020483009774586624,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/very_slow_isolated/seq3/sample_01_sim4_t0.png"
+        }
+      ]
+    },
+    {
+      "config": "configs/gnn_very_slow_isolated_seq5.yaml",
+      "experiment_name": "gnn_very_slow_isolated_seq5_ep10",
+      "saved_samples": 1,
+      "mean_mae": 0.0006366411689668894,
+      "mean_mse": 0.00038624595617875457,
+      "mean_rmse": 0.01965314112753365,
+      "samples": [
+        {
+          "mae": 0.0006366411689668894,
+          "mse": 0.00038624595617875457,
+          "rmse": 0.01965314112753365,
+          "sim_id": 4,
+          "start_timestep": 0,
+          "file": "results/gnn_experiments/very_slow_isolated/seq5/sample_01_sim4_t0.png"
+        }
+      ]
+    }
+  ]
+}

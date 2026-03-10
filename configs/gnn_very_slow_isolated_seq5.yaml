@@ -1,0 +1,21 @@
+experiment_name: gnn_very_slow_isolated_seq5_ep10
+data:
+  train_path: data/processed/very_slow_isolated_exp/processed_20260306_142046/datasets/gnn/train_seq5.json
+  val_path: data/processed/very_slow_isolated_exp/processed_20260306_142046/datasets/gnn/val_seq5.json
+  test_path: data/processed/very_slow_isolated_exp/processed_20260306_142046/datasets/gnn/test_seq5.json
+  checkpoint_path: gnn/checkpoints
+  log_path: gnn/training_logs
+model:
+  in_channels: 3
+  hidden_dim: 64
+  num_layers: 2
+  out_channels: 1
+  dropout: 0.2
+  type: temporal
+training:
+  epochs: 10
+  batch_size: 16
+  lr: 0.001
+  optimizer: adam
+  device: auto
+  seed: 42
