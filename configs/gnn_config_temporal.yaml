@@ -1,9 +1,9 @@
-experiment_name: "gnn_temporal_v1"
+experiment_name: "gnn_temporal_v3"
 
 data:
-  train_path: "../data/processed/processed_20260304_170128/datasets/gnn/train_seq5.json"
-  val_path: "../data/processed/processed_20260304_170128/datasets/gnn/val_seq5.json"
-  test_path: "../data/processed/processed_20260304_170128/datasets/gnn/test_seq5.json"
+  train_path: "../data/data/processed/processed_20260226_133131/datasets/gnn/train_seq10.json"
+  val_path: "../data/data/processed/processed_20260226_133131/datasets/gnn/val_seq10.json"
+  test_path: "../data/data/processed/processed_20260226_133131/datasets/gnn/test_seq10.json"
   checkpoint_path: "../gnn/checkpoints"
   log_path: "../gnn/training_logs"
 
