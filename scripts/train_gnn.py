@@ -348,7 +348,12 @@ def train(config_path="configs/gnn_config.yaml"):
 
                 print(f"Best model saved: Val Loss = {best_val_loss:.6f}")
 
-            
+            with open(log_path, mode="w", newline="") as f:
+                log_writer = csv.writer(f)
+                log_writer.writerow(["epoch", "train_loss", "val_loss"])
+                for i in range(len(train_losses)):
+                    log_writer.writerow([i + 1, train_losses[i], val_losses[i]])
+
 
 def main():
     args = parse_args()

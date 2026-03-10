@@ -1,0 +1,83 @@
+# Configuration des expériences GNN pour détection early/late stage
+# Run: python scripts/run_gnn_experiments.py --config configs/gnn_experiments.yaml
+
+experiment_name: "gnn_early_late_stage_detection"
+base_output_dir: "results/gnn_experiments"
+
+# Paramètres communs à tous les entraînements
+common:
+  grid_size: 64
+  num_simulations: 50
+  batch_size: 16
+  epochs: 45
+  lr: 0.001
+  hidden_dim: 64
+  num_layers: 2
+  dropout: 0.2
+  optimizer: "adam"
+  device: "auto"
+  mask: 0.3          # fraction de noeuds masqués (spatial GNN uniquement)
+  seed: 42
+
+# Configurations de datasets à tester (mêmes que CNN pour comparabilité directe)
+datasets:
+
+  # Propagation lente, infection courte (dissipation rapide)
+  - name: "slow_spread_short_infection"
+    model_type: "epidemic"
+    p_transmission: 0.1
+    spread_dimension: 7
+    infection_duration: 3
+    timesteps: 25
+    infection_seeds: 3
+
+  # Propagation moyenne, infection moyenne (cas standard / baseline)
+  - name: "medium_spread_medium_infection"
+    model_type: "epidemic"
+    p_transmission: 0.2
+    spread_dimension: 11
+    infection_duration: 5
+    timesteps: 30
+    infection_seeds: 3
+
+  # Propagation rapide, infection longue (épidémie sévère)
+  - name: "fast_spread_long_infection"
+    model_type: "epidemic"
+    p_transmission: 0.3
+    spread_dimension: 15
+    infection_duration: 10
+    timesteps: 30
+    infection_seeds: 3
+
+
+# Configurations de sequence_length à tester
+# in_channels = 3 pour le modèle temporel (infection, x, y)
+sequence_configs:
+
+  - name: "early_stage_3"
+    sequence_length: 3
+    description: "Détection très précoce — 3 timesteps d'historique"
+
+  - name: "early_stage_5"
+    sequence_length: 5
+    description: "Détection précoce — 5 timesteps d'historique"
+
+  - name: "late_stage_10"
+    sequence_length: 10
+    description: "Détection tardive / baseline — 10 timesteps d'historique"
+
+# Métriques à calculer (via eval_metrics.py)
+metrics:
+  - mse
+  - mae
+  - f1
+  - precision
+  - recall
+  - accuracy
+
+# Visualisations à générer
+visualizations:
+  - training_curves        # courbes train/val loss par epoch
+  - prediction_samples     # exemples de prédictions vs ground truth
+  - error_heatmaps         # erreur MAE projetée sur la grille
+  - early_vs_late_comparison  # comparaison des métriques entre seq=3/5/10
